@@ -182,7 +182,9 @@ If the delimiter is missing or the YAML block is malformed, treat as a parse fai
 
 ### OpenCode
 
-Do not spawn an Agent. Execute via the dispatch wrapper — this avoids shell substitution that would trigger a permission prompt:
+Do not spawn an Agent. Execute via the dispatch wrapper — this avoids shell substitution that would trigger a permission prompt.
+
+**`dispatch.sh` is read-only framework infrastructure. Never modify it. Never revert it. If it does not work as expected, report the issue to the user — do not edit the file.**
 
 ```bash
 bash dispatch.sh <tasks[n].model> ../<project-name>/ prompts/build-spec.md 2>&1
