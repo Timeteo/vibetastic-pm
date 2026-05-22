@@ -212,7 +212,33 @@ PM captures exit code and output. On success: task marked `done`. Tasks with no 
 
 ---
 
-## 10. Gate 2 — Task Double-Failure
+## 10. Mid-Project Work — Tech Lead
+
+The Architect's build-spec covers the work known at project start. It will not cover every bug, regression, or new requirement that emerges during Stage 3. When new work appears, the PM invokes the Tech Lead agent before creating any new OpenCode task.
+
+**What triggers the Tech Lead:**
+- You report a bug or new requirement in chat
+- Gate 2 fires and the fix needs speccing before retry
+- A completed task reveals follow-on work not covered by the existing spec
+
+**What the Tech Lead does:**
+1. Reads relevant source files in the target project to understand current state
+2. Fetches Apple/framework docs via Sosumi MCP if the issue involves Apple APIs
+3. Writes a precise, self-contained task spec (root cause, files to change, implementation steps, commit plan)
+4. Returns structured metadata: task title, branch, issue refs, suggested OpenCode model
+
+**What you see in chat:**
+
+> New work identified: OAuth redirect URI rejected by HA server.
+> Running Tech Lead to spec the fix before dispatch.
+
+The PM appends the Tech Lead's spec to `prompts/build-spec.md`, creates the new task in `PLAN.md`, and dispatches it to OpenCode — all without requiring your input unless a gate fires.
+
+**Model:** Tech Lead runs on Sonnet by default. It suggests the OpenCode model in its returned metadata based on task complexity — simple bugs get Gemini Flash, complex architectural changes get Sonnet.
+
+---
+
+## 11. Gate 2 — Task Double-Failure
 
 Gate 2 does not appear on the happy path. It fires only when a task fails twice.
 
@@ -271,13 +297,25 @@ claude
   ↓ SPEC interview (PM asks, you answer)
   ↓ Gate 1 — type "approved"
   ↓ Plan generated
-  ↓ Gate 3 — type "proceed"    ← Stage 1: Design
-  ↓ Designer runs autonomously
-  ↓ Gate 3 — type "proceed"    ← Stage 2: Architecture
-  ↓ Architect runs autonomously
-  ↓ Gate 3 — type "proceed"    ← Stage 3: Implementation
+  ↓ Gate 3 — type "proceed"         ← Stage 1: Design
+  ↓ Designer (Opus) runs autonomously
+  ↓ Gate 3 — type "proceed"         ← Stage 2: Architecture
+  ↓ Architect (Opus) runs autonomously, selects OpenCode model
+  ↓ Gate 3 — type "proceed"         ← Stage 3: Implementation
+  ↓ OpenCode (Gemini Flash) runs autonomously
+  ↓ [new bug or requirement]
+  ↓ Tech Lead (Sonnet) specs the fix autonomously
   ↓ OpenCode runs autonomously
   ↓ Project complete
 ```
 
 Three `proceed`s and one `approved`. Everything else is autonomous.
+
+**Agent roster:**
+
+| Agent | Model | Runs | Job |
+|---|---|---|---|
+| Designer | Opus | Once | Design spec |
+| Architect | Opus | Once | Build spec + OpenCode model selection |
+| Tech Lead | Sonnet | Per new mid-project task | Bug/feature → task spec |
+| OpenCode | Gemini 2.5 Flash (or Architect selection) | Per implementation task | Write code |
