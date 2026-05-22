@@ -2,8 +2,19 @@
 project: "<project-name>"
 created: "<ISO8601>"
 updated: "<ISO8601>"
+stages:
+  - id: 1
+    name: "Design"
+    status: pending
+  - id: 2
+    name: "Architecture"
+    status: pending
+  - id: 3
+    name: "Implementation"
+    status: pending
 tasks:
   - id: T001
+    stage: 1
     title: "Design UI and interaction model"
     agent: designer
     status: pending
@@ -14,9 +25,11 @@ tasks:
     model: null
     started_at: null
     completed_at: null
+    failure_count: 0
     error: null
 
   - id: T002
+    stage: 2
     title: "Architect build plan"
     agent: architect
     status: pending
@@ -28,9 +41,11 @@ tasks:
     model: null
     started_at: null
     completed_at: null
+    failure_count: 0
     error: null
 
   - id: T003
+    stage: 3
     title: "<implementation task title>"
     agent: opencode
     status: pending
@@ -41,6 +56,7 @@ tasks:
     model: null
     started_at: null
     completed_at: null
+    failure_count: 0
     error: null
 ---
 

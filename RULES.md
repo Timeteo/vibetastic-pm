@@ -117,19 +117,79 @@ If OpenRouter query fails or returns no matching models:
 
 ---
 
-## Escalation Triggers
+## Stages
 
-The PM halts and escalates to the user when:
+A **Stage** is a named group of tasks in PLAN.md that represents a logical phase of the project. Stages are defined in the `stages:` list and referenced by `stage:` on each task.
+
+Default stages:
+- **Stage 1 — Design**: Designer agent produces `prompts/design-spec.md`
+- **Stage 2 — Architecture**: Architect agent produces `prompts/build-spec.md` and selects model
+- **Stage 3 — Implementation**: OpenCode executes against the target project
+
+The PM generates stage definitions as part of plan generation. Custom projects may have more or fewer stages.
+
+**Stage status transitions:** `pending → in_progress → done`
+
+A stage moves to `done` when all tasks with that `stage:` id have `status: done`. When a stage reaches `done`, the PM hits Gate 3 (see below) before advancing.
+
+---
+
+## Lifecycle Gates
+
+Three gates require an explicit pause for user confirmation in chat. The PM **must not proceed** past a gate autonomously. Each gate is a hard stop — no timeout, no self-approval, no inference of consent from prior messages.
+
+### Gate 1 — SPEC Approval
+
+**Trigger:** SPEC.md has `status: draft`
+
+**PM behavior:**
+1. Display the full SPEC.md body to the user in chat
+2. Say: *"Please review the spec above. Type **approved** to unlock the build plan, or give me feedback to revise it."*
+3. Wait for user response. If feedback: revise SPEC, re-present, repeat.
+4. On approval: set `status: approved`, write `approved_at`, append `spec_approved` to TASK_LOG, then proceed to plan generation.
+
+**PM must not:** generate PLAN.md, dispatch any agent, or take any other action while `status: draft`.
+
+---
+
+### Gate 2 — Task Double-Failure
+
+**Trigger:** A task's `failure_count` reaches 2
+
+**PM behavior:**
+1. Do not retry automatically.
+2. Report to user in chat: task id, title, both error messages (from TASK_LOG), and current state of PLAN.md.
+3. Say: *"Task T00X has failed twice. How would you like to proceed? Options: **retry** / **skip** / **abort**."*
+4. Wait for explicit user decision. Apply it.
+
+**Retry budget:** 1 automatic retry per task (i.e., PM retries once on first failure, increments `failure_count`, then hits Gate 2 on second failure). Not configurable — Gate 2 is always at `failure_count == 2`.
+
+---
+
+### Gate 3 — Stage Transition
+
+**Trigger:** All tasks in Stage N reach `status: done`
+
+**PM behavior:**
+1. Mark the stage `status: done` in PLAN.md.
+2. Summarize completed stage in chat: what was built/produced, key outputs.
+3. Say: *"Stage N ([name]) is complete. Ready to begin Stage N+1 ([name]). Type **proceed** to start, or give me any adjustments first."*
+4. Wait for explicit user go-ahead. Accept feedback or adjustments before advancing.
+5. On confirmation: mark next stage `status: in_progress`, append `stage_transition` event to TASK_LOG, dispatch first ready tasks.
+
+**PM must not:** dispatch any task in Stage N+1 until user has explicitly confirmed.
+
+---
+
+## Escalation Triggers (Autonomous — No Gate)
+
+The PM handles these autonomously without pausing for user input:
 
 | Trigger | Action |
 |---|---|
-| SPEC status is `draft` | Present SPEC for approval before continuing |
-| Circular dependency detected in task graph | Report cycle, request PLAN correction |
-| Task `failed` with no remaining retry budget | Report error, request human decision |
-| OpenRouter unreachable for >2 attempts | Use fallback model, log warning |
-| Agent returns malformed/unparseable output | Log, retry once, then escalate |
-
-Retry budget default: **1 retry per task**. Can be overridden per-task by adding `retry_budget: <n>` to the task entry in PLAN.md.
+| Circular dependency detected in task graph | Report to user, halt, request PLAN correction |
+| OpenRouter unreachable for >2 attempts | Use fallback model, log `model_fallback` event |
+| Agent returns malformed/unparseable output | Log, retry once; if second parse failure, treat as task failure (increments `failure_count`) |
 
 ---
 

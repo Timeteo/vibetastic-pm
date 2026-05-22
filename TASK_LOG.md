@@ -24,6 +24,8 @@ Valid event_type values:
   agent_returned      - Agent returned structured result to PM
   task_completed      - PM applied result, wrote outputs, updated PLAN.md
   task_failed         - Agent error; PM wrote error field to PLAN.md
-  task_retrying       - PM retrying failed task (within retry budget)
-  user_escalation     - PM halted and escalated to user with reason
+  task_retrying       - PM retrying failed task (first failure, automatic)
+  stage_complete      - All tasks in a stage reached done; Gate 3 triggered
+  stage_transition    - User confirmed Gate 3; PM advancing to next stage
+  user_escalation     - PM halted and escalated to user with reason (Gate 2 or fatal)
 -->
