@@ -149,21 +149,45 @@ If the delimiter is missing or the YAML block is malformed, treat the return as 
 
 ### OpenCode
 
-Do not spawn an Agent. Execute via shell:
+Do not spawn an Agent. Execute via the dispatch wrapper — this avoids shell substitution that would trigger a permission prompt:
 
 ```bash
-opencode run \
-  --model <tasks[n].model> \
-  --dir ../<project-name>/ \
-  --dangerously-skip-permissions \
-  "$(cat prompts/build-spec.md)" 2>&1
+bash dispatch.sh <tasks[n].model> ../<project-name>/ prompts/build-spec.md 2>&1
 ```
+
+The `dispatch.sh` script in the `-pm/` directory handles the `opencode run` invocation. If it does not exist, create it first (see WALKTHROUGH.md §1).
 
 Capture exit code and full stdout/stderr.
 
 After execution:
-- **Exit 0:** mark task `done`, append `task_completed` to TASK_LOG with output summary
+- **Exit 0:** open a PR, then mark task `done` (see PR Opening below)
 - **Exit non-0:** handle as task failure (see Failure Handling below)
+
+### PR Opening
+
+After a successful OpenCode exit, **you (the PM orchestrator) run `gh pr create`** from the `-pm/` directory to open a PR on behalf of the completed task. OpenCode does not open PRs — that is your responsibility. Open the PR before marking the task done:
+
+```bash
+gh pr create \
+  --title "<task title>" \
+  --body "$(cat <<'EOF'
+## Summary
+<1-3 bullet points from task notes and build spec>
+
+Closes #<issue number from task notes>
+
+## Test plan
+<bulleted checklist drawn from build spec acceptance criteria>
+EOF
+)" \
+  --base develop
+```
+
+- Derive the PR title from `tasks[n].title` in PLAN.md
+- Extract the issue number from `tasks[n].notes`
+- Draw the summary and test plan from the relevant section of `prompts/build-spec.md`
+- After the PR is created, append `pr_opened` (with PR URL) to TASK_LOG and mark the task `done`
+- If `gh pr create` fails, log the error and mark task `done` anyway — the user can open the PR manually; do not let a PR failure block task completion
 
 ---
 

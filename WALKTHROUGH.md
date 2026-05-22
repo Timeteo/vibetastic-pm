@@ -8,16 +8,43 @@ This guide walks through setting up and running the PM framework on a new projec
 
 You need a target project directory (empty or existing) and a sibling `-pm/` directory containing the framework. The `-pm/` naming convention is defined in `RULES.md`.
 
+### Recommended: git subtree (pulls future framework updates cleanly)
+
 ```bash
 cd ~/dev/projects
 
 # Target project (create or use existing)
 mkdir my-app
 
-# Instantiate the framework as a sibling
+# Create the pm directory as its own git repo
+mkdir my-app-pm && cd my-app-pm && git init
+
+# Pull vibetastic-pm framework files into a framework/ subdirectory
+git subtree add --prefix framework \
+  https://github.com/Timeteo/vibetastic-pm main --squash
+
+# Symlink CLAUDE.md to the root so Claude Code auto-loads it
+ln -s framework/CLAUDE.md CLAUDE.md
+```
+
+To pull framework updates later:
+```bash
+git subtree pull --prefix framework \
+  https://github.com/Timeteo/vibetastic-pm main --squash
+```
+
+Project-specific files (`SPEC.md`, `PLAN.md`, `TASK_LOG.md`, `prompts/design-spec.md`, `prompts/build-spec.md`) live in the root alongside the `framework/` directory — they are not tracked by upstream.
+
+### Simple alternative: cp -r (no upstream tracking)
+
+```bash
+cd ~/dev/projects
+mkdir my-app
 cp -r vibetastic-pm/ my-app-pm/
 cd my-app-pm/
 ```
+
+This works but framework improvements must be applied manually to each project instance.
 
 ---
 
@@ -173,11 +200,13 @@ Type `proceed`. The PM runs each Implementation task via shell — no Agent spaw
 
 ```bash
 opencode run \
-  --model anthropic/claude-opus-4-7 \
+  --model anthropic/claude-sonnet-4-6 \
   --dir ../my-app/ \
   --dangerously-skip-permissions \
   "$(cat prompts/build-spec.md)" 2>&1
 ```
+
+The model shown here is the Architect's selection (written to `tasks[n].model` in PLAN.md). It will never be Opus — see the Model Tier Policy in `RULES.md`. Opus is reserved for the Designer and Architect planning agents only; OpenCode runs on the best available Sonnet-class or equivalent coding model.
 
 PM captures exit code and output. On success: task marked `done`. Tasks with no inter-dependencies within a stage may run in parallel at the PM's discretion.
 

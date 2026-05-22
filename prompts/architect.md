@@ -179,6 +179,8 @@ Instructions specifically for the OpenCode agent executing this spec:
 
 Query OpenRouter for the best model to execute this build spec. The task type is `implementation`.
 
+**Important:** You (the Architect) run on Opus. The model you select here is for the OpenCode coding agent — a different role. Opus-class models must be excluded from this selection. Strong coding models at the Sonnet tier (or third-party equivalents) are the target: they have excellent code generation throughput at a fraction of the cost.
+
 Run this command (replace with your actual key from the environment variable `OPENROUTER_API_KEY`):
 
 ```bash
@@ -187,7 +189,11 @@ curl -s https://openrouter.ai/api/v1/models \
   python3 -c "
 import json, sys
 models = json.load(sys.stdin).get('data', [])
-for m in sorted(models, key=lambda x: float((x.get('pricing',{}).get('completion') or '0') or 0)):
+EXCLUDE = ['opus']
+filtered = [m for m in models
+    if m.get('context_length', 0) >= 32000
+    and not any(x in m.get('id','').lower() for x in EXCLUDE)]
+for m in sorted(filtered, key=lambda x: float((x.get('pricing',{}).get('completion') or '999') or '999')):
     ctx = m.get('context_length', 0)
     name = m.get('id','')
     print(f'{name}  ctx={ctx}  cost={m.get(\"pricing\",{}).get(\"completion\",\"?\")}/tok')
@@ -195,10 +201,11 @@ for m in sorted(models, key=lambda x: float((x.get('pricing',{}).get('completion
 ```
 
 Apply the selection algorithm from the Model Selection Rules above:
-1. Filter for models with context window ≥ 32k (implementation tasks)
-2. Prefer models with strong code generation capability (Claude, GPT-4, Gemini Pro-level or above)
-3. Rank: capability > context window > cost
-4. Select rank 1
+1. Filter for models with context window ≥ 32k
+2. **Exclude all Opus-class models** (any model id containing "opus")
+3. Prefer models with strong code generation capability (Claude Sonnet, GPT-4o, Gemini Flash/Pro, DeepSeek-level or above)
+4. Rank: coding capability > context window > cost
+5. Select rank 1
 
 If the query fails or returns no usable results, use the fallback: `anthropic/claude-sonnet-4-6`
 

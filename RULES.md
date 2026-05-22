@@ -81,6 +81,21 @@ Flow:
 
 Used by the Architect agent when preparing an OpenCode invocation.
 
+### Model Tier Policy
+
+Two tiers, non-negotiable:
+
+| Role | Model class | Rationale |
+|---|---|---|
+| Designer agent | Opus (latest) | Creative and structural reasoning at planning stage |
+| Architect agent | Opus (latest) | Architecture decisions require peak complex reasoning |
+| OpenCode invocation | Best coding-optimized model (Sonnet-class or equivalent) | Code generation is throughput work — Opus is overkill and expensive for keystrokes |
+
+Opus-class models are **excluded** from OpenCode model selection. The selection algorithm below applies only to the OpenCode invocation model, and must filter out Opus before ranking.
+
+Fallback for Designer and Architect agents (if API unavailable): `claude-opus-4-7`  
+Fallback for OpenCode: `claude-sonnet-4-6`
+
 ### Step 1 — Classify task type
 
 | Task type | Capability requirements |
@@ -113,7 +128,7 @@ Select rank 1. Write selected model id to `tasks[n].model` in PLAN.md before dis
 
 If OpenRouter query fails or returns no matching models:
 - Log `model_selection_failed` event in TASK_LOG.md with reason
-- Use fallback: `anthropic/claude-opus-4-7` for architecture/review, `anthropic/claude-sonnet-4-6` for implementation/design
+- Use fallback: `claude-sonnet-4-6` for OpenCode invocations (never Opus — see Model Tier Policy above)
 
 ---
 
