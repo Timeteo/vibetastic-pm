@@ -9,5 +9,5 @@ exec opencode run \
   --model "$MODEL" \
   --dir "$DIR" \
   --dangerously-skip-permissions \
-  --file "$PROMPT_FILE" \
-  "Execute the build spec attached as a file."
+  "Execute the build spec attached as a file." \
+  --file "$PROMPT_FILE"
