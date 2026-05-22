@@ -121,10 +121,8 @@ loop:
 
 ### Designer
 
-Spawn a fresh Agent with:
-- Full `SPEC.md` content
-- Instructions to produce a structured design spec covering: user flows, screen/component breakdown, interaction model, visual hierarchy notes, and any assets or layout constraints
-- Instruction to return the spec as a markdown document (not a summary — the full spec)
+Read `prompts/designer.md`. Substitute the injection point, then spawn a fresh Agent with the rendered prompt:
+- `{{SPEC_CONTENT}}` → full body of `SPEC.md`
 
 After return:
 - Write agent output verbatim to `prompts/design-spec.md`
@@ -133,21 +131,21 @@ After return:
 
 ### Architect
 
-Spawn a fresh Agent with:
-- Full `SPEC.md` content
-- Full `prompts/design-spec.md` content
-- The model selection section of `RULES.md`
-- The target project path (`../<project>/`)
-- Instructions to:
-  1. Produce a build spec for each Implementation task: file-by-file implementation instructions, ordered steps, acceptance criteria
-  2. Select an appropriate model via OpenRouter for each OpenCode task (per model selection algorithm in RULES.md)
-  3. Return: build spec (markdown) + selected model id(s) as a structured result
+Read `prompts/architect.md`. Substitute the four injection points, then spawn a fresh Agent with the rendered prompt:
+- `{{SPEC_CONTENT}}` → full body of `SPEC.md`
+- `{{DESIGN_SPEC_CONTENT}}` → full contents of `prompts/design-spec.md`
+- `{{TARGET_PROJECT_PATH}}` → absolute path to `../<project-name>/`
+- `{{MODEL_SELECTION_RULES}}` → the "Model Selection Algorithm" section of `RULES.md` verbatim
 
-After return:
-- Write build spec to `prompts/build-spec.md`
-- Write selected model id to `tasks[n].model` in PLAN.md for each OpenCode task
+After return, parse the output on the delimiter `<!-- ARCHITECT_RESULT_START -->`:
+1. Everything **before** the delimiter → write to `prompts/build-spec.md`
+2. The YAML block **after** the delimiter → extract `selected_model`, write to `tasks[n].model` in PLAN.md; log `model_fallback_used` if true
+
+Then:
 - Append `model_selected`, `agent_returned`, `task_completed` to TASK_LOG
-- Update task in PLAN.md: `status: done`, `completed_at`
+- Update Architect task in PLAN.md: `status: done`, `completed_at`
+
+If the delimiter is missing or the YAML block is malformed, treat the return as a parse failure (increments `failure_count`).
 
 ### OpenCode
 
