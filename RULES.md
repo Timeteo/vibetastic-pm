@@ -128,7 +128,7 @@ Select rank 1. Write selected model id to `tasks[n].model` in PLAN.md before dis
 
 If OpenRouter query fails or returns no matching models:
 - Log `model_selection_failed` event in TASK_LOG.md with reason
-- Use fallback: `claude-sonnet-4-6` for OpenCode invocations (never Opus — see Model Tier Policy above)
+- Use fallback: `google/gemini-2.5-flash` for OpenCode invocations (never Opus — see Model Tier Policy above)
 
 ---
 
