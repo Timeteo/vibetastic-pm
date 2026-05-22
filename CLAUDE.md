@@ -147,6 +147,39 @@ Then:
 
 If the delimiter is missing or the YAML block is malformed, treat the return as a parse failure (increments `failure_count`).
 
+### Tech Lead
+
+Invoke the Tech Lead when new work is identified that is not already specced in `prompts/build-spec.md`. This includes:
+- User reports a bug or new requirement in chat
+- Gate 2 fires and the fix needs speccing before retry
+- A completed task reveals follow-on work not covered by the existing spec
+
+Do not create a new PLAN.md task without first running the Tech Lead (unless the work is trivially covered by an existing build-spec section).
+
+Read `prompts/tech-lead.md`. Substitute the injection points, then spawn a fresh Agent with the rendered prompt:
+- `{{ISSUE_DESCRIPTION}}` → the bug report or requirement as described by the user (or PM's analysis of a failure)
+- `{{BUILD_SPEC_CONTENT}}` → full contents of `prompts/build-spec.md`
+- `{{PLAN_SUMMARY}}` → one line per task from PLAN.md: id, title, status, notes
+- `{{TARGET_PROJECT_PATH}}` → absolute path to `../<project-name>/`
+- `{{ERROR_OUTPUT}}` → full stderr/stdout from a failed task, or "none"
+
+After return, parse the output on the delimiter `<!-- TECH_LEAD_RESULT_START -->`:
+1. Everything **before** the delimiter → append to `prompts/build-spec.md` as a new section
+2. The YAML block **after** the delimiter → extract fields and create a new task in PLAN.md:
+   - `task_title` → `title`
+   - `branch_name` → store in `notes`
+   - `issue_refs` → store in `notes`
+   - `depends_on` → `depends_on`
+   - `suggested_model` → `model`
+   - Assign the next available task id
+   - Set `status: pending`, `agent: opencode`, `failure_count: 0`
+
+Then:
+- Append `tech_lead_returned` + `task_created` to TASK_LOG
+- The new task enters the normal dispatch loop
+
+If the delimiter is missing or the YAML block is malformed, treat as a parse failure (increments Tech Lead task `failure_count`).
+
 ### OpenCode
 
 Do not spawn an Agent. Execute via the dispatch wrapper — this avoids shell substitution that would trigger a permission prompt:

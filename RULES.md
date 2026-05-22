@@ -221,6 +221,13 @@ The PM handles these autonomously without pausing for user input:
 - **Does:** Query OpenRouter for model selection, construct OpenCode invocation command
 - **Does not:** Execute OpenCode directly — returns the command string to PM
 
+### Tech Lead
+- **Receives:** Issue description, full build-spec, PLAN.md summary, target project path, optional error output
+- **Does:** Reads actual source files in the target project to understand current state; fetches Apple/framework docs via Sosumi MCP if relevant; writes a precise task spec
+- **Returns:** Task spec section (appended to build-spec.md) + structured YAML metadata (task title, branch, issue refs, depends_on, suggested model)
+- **Does not:** Write code, execute commands in the target project, or make implementation decisions beyond speccing
+- **Model:** Sonnet by default; PM may use Opus for complex architectural tasks
+
 ### OpenCode (via PM shell invocation)
 - **Invoked with:** `opencode run --model <model> --dir <target-project-path> --dangerously-skip-permissions "$(cat prompts/build-spec.md)"`
 - **PM captures:** stdout/stderr, exit code
