@@ -121,11 +121,19 @@ loop:
 
 ### Designer
 
+The Designer runs at Stage 1 to produce the initial design spec, and again mid-project whenever new work involves UI — a new screen, a new component, or any feature where visual design decisions (layout, states, transitions, interaction model) need to be made before implementation can be specced. Do not route UI work directly to the Tech Lead without a Designer pass first.
+
+**When to invoke mid-project:** User reports a new screen or UI feature → Designer first, then Tech Lead.
+**When to skip mid-project:** Pure bug fixes, non-UI backend/data changes → Tech Lead directly.
+
 Read `framework/prompts/designer.md`. Substitute the injection point, then spawn a fresh Agent with the rendered prompt:
 - `{{SPEC_CONTENT}}` → full body of `SPEC.md`
 
+**Mid-project invocations:** Also pass a brief description of the specific UI addition at the top of the prompt (after substituting `{{SPEC_CONTENT}}`), so the Designer scopes its output to the new work only.
+
 After return:
-- Write agent output verbatim to `prompts/design-spec.md`
+- **Stage 1:** Write agent output verbatim to `prompts/design-spec.md`
+- **Mid-project:** Append agent output to `prompts/design-spec.md` as a new section; note the addition in TASK_LOG
 - Append `agent_returned` + `task_completed` to TASK_LOG
 - Update task in PLAN.md: `status: done`, `completed_at`
 
@@ -154,7 +162,11 @@ Invoke the Tech Lead when new work is identified that is not already specced in 
 - Gate 2 fires and the fix needs speccing before retry
 - A completed task reveals follow-on work not covered by the existing spec
 
-Do not create a new PLAN.md task without first running the Tech Lead (unless the work is trivially covered by an existing build-spec section).
+**Routing rule — always apply before invoking Tech Lead:**
+- New screen, new UI component, or any feature with visual design decisions → **Designer first, then Tech Lead.** Pass the Designer's output to the Tech Lead as additional context.
+- Bug fix or non-UI change → **Tech Lead directly.**
+
+Do not create a new PLAN.md task without first running the Tech Lead (unless the work is trivially covered by an existing build-spec section). Do not run the Tech Lead on UI work without a Designer pass first.
 
 Read `framework/prompts/tech-lead.md`. Substitute the injection points, then spawn a fresh Agent with the rendered prompt:
 - `{{ISSUE_DESCRIPTION}}` → the bug report or requirement as described by the user (or PM's analysis of a failure)

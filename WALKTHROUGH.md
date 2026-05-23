@@ -234,11 +234,15 @@ PM captures exit code and output. On success: task marked `done`. Tasks with no 
 
 ---
 
-## 10. Mid-Project Work — Tech Lead
+## 10. Mid-Project Work — Routing Rule
 
-The Architect's build-spec covers the work known at project start. It will not cover every bug, regression, or new requirement that emerges during Stage 3. When new work appears, the PM invokes the Tech Lead agent before creating any new OpenCode task.
+The Architect's build-spec covers the work known at project start. It will not cover every bug, regression, or new requirement that emerges during Stage 3. When new work appears, the PM routes it before creating any new OpenCode task.
 
-**What triggers the Tech Lead:**
+**Routing rule:**
+- **New screen, new UI component, or any feature with visual design decisions** → Designer first, then Tech Lead, then OpenCode
+- **Bug fix or non-UI change** → Tech Lead directly, then OpenCode
+
+**What triggers this flow:**
 - You report a bug or new requirement in chat
 - Gate 2 fires and the fix needs speccing before retry
 - A completed task reveals follow-on work not covered by the existing spec
