@@ -331,6 +331,25 @@ Include enough detail to reconstruct what happened without reading PLAN.md. On f
 
 ---
 
+## Framework Updates
+
+When the user says "pull framework updates" (or equivalent):
+
+1. Commit any dirty project files first — the subtree pull requires a clean working tree:
+   ```bash
+   git add PLAN.md TASK_LOG.md SPEC.md prompts/
+   git diff --staged --quiet || git commit -m "Checkpoint project state before framework update"
+   ```
+2. Pull the framework:
+   ```bash
+   git subtree pull --prefix framework framework main --squash
+   ```
+3. Report what changed (the merge output will list updated files).
+
+Do not modify any files under `framework/` — it is a read-only subtree managed by upstream.
+
+---
+
 ## Recovery Protocol
 
 If you are invoked mid-project (context was reset, prior session ended):
