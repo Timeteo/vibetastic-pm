@@ -186,8 +186,37 @@ Do not spawn an Agent. Execute via the dispatch wrapper — this avoids shell su
 
 **`dispatch.sh` is read-only framework infrastructure. Never modify it. Never revert it. If it does not work as expected, report the issue to the user — do not edit the file.**
 
+**Before calling dispatch.sh, extract a task-scoped prompt file.** Do not pass the full `build-spec.md` — it accumulates all historical task sections and is far too large. Extract only what OpenCode needs:
+
+1. **Preamble** — everything before the first `## T` section (critical instructions + project state)
+2. **`## OpenCode Execution Notes`** section — general execution guidance
+3. **`## T<id>`** section — the current task only
+
+Use this awk command, substituting the actual task id:
+
 ```bash
-bash dispatch.sh <tasks[n].model> ../<project-name>/ prompts/build-spec.md 2>&1
+TASK_ID="<tasks[n].id>"   # e.g. T011
+TASK_PROMPT="prompts/task-${TASK_ID}.md"
+
+awk -v id="${TASK_ID}" '
+BEGIN { mode = "preamble" }
+/^## OpenCode Execution Notes/ { mode = "notes"; print; next }
+/^## T[0-9]/ {
+  if (mode == "preamble") { mode = "skip"; next }
+  if (mode == "task") { exit }
+  if ($0 ~ ("^## " id "( |$)")) { mode = "task"; print; next }
+  mode = "skip"; next
+}
+mode == "preamble" || mode == "notes" || mode == "task" { print }
+' prompts/build-spec.md > "${TASK_PROMPT}"
+```
+
+The last section (the current task) reads to EOF if no following `## T` section exists — this is correct behavior. The per-task file also serves as a permanent audit trail of exactly what spec each OpenCode invocation received.
+
+Then dispatch using the extracted file:
+
+```bash
+bash dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" 2>&1
 ```
 
 The `dispatch.sh` script in the `-pm/` directory handles the `opencode run` invocation. If it does not exist, create it first (see WALKTHROUGH.md §1).
