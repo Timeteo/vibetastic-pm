@@ -156,7 +156,7 @@ Type `proceed`. The PM:
 
 1. Sets `stages[1].status: in_progress` in PLAN.md
 2. Appends `stage_transition` to TASK_LOG
-3. Reads `prompts/designer.md`, substitutes `{{SPEC_CONTENT}}`
+3. Reads `framework/prompts/designer.md`, substitutes `{{SPEC_CONTENT}}`
 4. Spawns Designer agent
 5. Receives design spec back
 6. Writes output to `prompts/design-spec.md`
@@ -182,31 +182,35 @@ At this point the state files look like:
 
 ```
 my-app-pm/
+├── CLAUDE.md           symlink → framework/CLAUDE.md
 ├── SPEC.md             status: approved
 ├── PLAN.md             T001 done, T002 done, T003/T004 pending
 ├── TASK_LOG.md         6+ entries
-└── prompts/
-    ├── designer.md
-    ├── architect.md
-    ├── design-spec.md  ← Designer output
-    └── build-spec.md   ← Architect output
+├── prompts/
+│   ├── design-spec.md  ← Designer output
+│   └── build-spec.md   ← Architect output
+└── framework/          ← git subtree (vibetastic-pm); read-only
+    ├── CLAUDE.md
+    ├── RULES.md
+    ├── WALKTHROUGH.md
+    ├── dispatch.sh
+    └── prompts/
+        ├── designer.md
+        ├── architect.md
+        └── tech-lead.md
 ```
 
 ---
 
 ## 9. Stage 3 — OpenCode Executes
 
-Type `proceed`. The PM runs each Implementation task via shell — no Agent spawn, direct execution:
+Type `proceed`. The PM runs each Implementation task via shell — no Agent spawn, direct execution. Before dispatching, it extracts a task-scoped prompt file containing only the preamble, execution notes, and the current task section (see CLAUDE.md for the awk command). Then:
 
 ```bash
-opencode run \
-  --model anthropic/claude-sonnet-4-6 \
-  --dir ../my-app/ \
-  --dangerously-skip-permissions \
-  "$(cat prompts/build-spec.md)" 2>&1
+bash framework/dispatch.sh <model> ../my-app/ prompts/task-T00X.md 2>&1
 ```
 
-The model shown here is the Architect's selection (written to `tasks[n].model` in PLAN.md). It will never be Opus — see the Model Tier Policy in `RULES.md`. Opus is reserved for the Designer and Architect planning agents only; OpenCode runs on the best available Sonnet-class or equivalent coding model.
+The model is the Architect's selection (written to `tasks[n].model` in PLAN.md). It will never be Opus — see the Model Tier Policy in `RULES.md`. Opus is reserved for the Designer and Architect planning agents only; OpenCode runs on the best available Sonnet-class or equivalent coding model.
 
 PM captures exit code and output. On success: task marked `done`. Tasks with no inter-dependencies within a stage may run in parallel at the PM's discretion.
 

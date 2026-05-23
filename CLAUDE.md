@@ -121,7 +121,7 @@ loop:
 
 ### Designer
 
-Read `prompts/designer.md`. Substitute the injection point, then spawn a fresh Agent with the rendered prompt:
+Read `framework/prompts/designer.md`. Substitute the injection point, then spawn a fresh Agent with the rendered prompt:
 - `{{SPEC_CONTENT}}` → full body of `SPEC.md`
 
 After return:
@@ -131,7 +131,7 @@ After return:
 
 ### Architect
 
-Read `prompts/architect.md`. Substitute the four injection points, then spawn a fresh Agent with the rendered prompt:
+Read `framework/prompts/architect.md`. Substitute the four injection points, then spawn a fresh Agent with the rendered prompt:
 - `{{SPEC_CONTENT}}` → full body of `SPEC.md`
 - `{{DESIGN_SPEC_CONTENT}}` → full contents of `prompts/design-spec.md`
 - `{{TARGET_PROJECT_PATH}}` → absolute path to `../<project-name>/`
@@ -156,7 +156,7 @@ Invoke the Tech Lead when new work is identified that is not already specced in 
 
 Do not create a new PLAN.md task without first running the Tech Lead (unless the work is trivially covered by an existing build-spec section).
 
-Read `prompts/tech-lead.md`. Substitute the injection points, then spawn a fresh Agent with the rendered prompt:
+Read `framework/prompts/tech-lead.md`. Substitute the injection points, then spawn a fresh Agent with the rendered prompt:
 - `{{ISSUE_DESCRIPTION}}` → the bug report or requirement as described by the user (or PM's analysis of a failure)
 - `{{BUILD_SPEC_CONTENT}}` → full contents of `prompts/build-spec.md`
 - `{{PLAN_SUMMARY}}` → one line per task from PLAN.md: id, title, status, notes
@@ -184,9 +184,9 @@ If the delimiter is missing or the YAML block is malformed, treat as a parse fai
 
 Do not spawn an Agent. Execute via the dispatch wrapper — this avoids shell substitution that would trigger a permission prompt.
 
-**`dispatch.sh` is read-only framework infrastructure. Never modify it. Never revert it. If it does not work as expected, report the issue to the user — do not edit the file.**
+**`framework/dispatch.sh` is read-only framework infrastructure. Never modify it. Never revert it. If it does not work as expected, report the issue to the user — do not edit the file.**
 
-**Before calling dispatch.sh, extract a task-scoped prompt file.** Do not pass the full `build-spec.md` — it accumulates all historical task sections and is far too large. Extract only what OpenCode needs:
+**Before calling framework/dispatch.sh, extract a task-scoped prompt file.** Do not pass the full `build-spec.md` — it accumulates all historical task sections and is far too large. Extract only what OpenCode needs:
 
 1. **Preamble** — everything before the first `## T` section (critical instructions + project state)
 2. **`## OpenCode Execution Notes`** section — general execution guidance
@@ -216,10 +216,10 @@ The last section (the current task) reads to EOF if no following `## T` section 
 Then dispatch using the extracted file:
 
 ```bash
-bash dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" 2>&1
+bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" 2>&1
 ```
 
-The `dispatch.sh` script in the `-pm/` directory handles the `opencode run` invocation. If it does not exist, create it first (see WALKTHROUGH.md §1).
+The `framework/dispatch.sh` script handles the `opencode run` invocation. It is part of the framework subtree and must not be modified directly.
 
 Capture exit code and full stdout/stderr.
 

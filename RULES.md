@@ -11,12 +11,17 @@ Each project gets a sibling PM directory named `<project-name>-pm/`:
 Developer/
 ├── my-app/          ← target project (any stack)
 └── my-app-pm/       ← PM framework instance (this structure)
-    ├── CLAUDE.md
+    ├── CLAUDE.md    ← symlink → framework/CLAUDE.md
     ├── SPEC.md
     ├── PLAN.md
-    ├── RULES.md
     ├── TASK_LOG.md
-    └── prompts/
+    ├── prompts/     ← PM-written project outputs (design-spec, build-spec, task files)
+    └── framework/   ← git subtree tracking vibetastic-pm; read-only
+        ├── CLAUDE.md
+        ├── RULES.md
+        ├── WALKTHROUGH.md
+        ├── dispatch.sh
+        └── prompts/ ← agent prompt templates (designer, architect, tech-lead)
 ```
 
 The `-pm/` directory is the sole source of truth for project state. The target project directory is treated as an opaque build output.
@@ -34,6 +39,7 @@ The PM orchestrator is the **sole writer** to all state files. Subagents receive
 | RULES.md | Human (setup) | PM, all agents |
 | TASK_LOG.md | PM (append-only) | PM (recovery) |
 | prompts/* | PM (from agent output) | Architect, OpenCode |
+| framework/* | git subtree (read-only) | PM, all agents |
 
 ---
 
@@ -229,7 +235,7 @@ The PM handles these autonomously without pausing for user input:
 - **Model:** Sonnet by default; PM may use Opus for complex architectural tasks
 
 ### OpenCode (via PM shell invocation)
-- **Invoked with:** `opencode run --model <model> --dir <target-project-path> --dangerously-skip-permissions "$(cat prompts/build-spec.md)"`
+- **Invoked with:** `bash framework/dispatch.sh <model> <target-project-path> <per-task-prompt-file>` — PM extracts a task-scoped prompt file via awk before calling dispatch (see CLAUDE.md OpenCode section)
 - **PM captures:** stdout/stderr, exit code
 - **On success:** PM marks task done, logs output summary
 - **On failure:** PM writes exit code + stderr to `error` field, evaluates retry
