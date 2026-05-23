@@ -1,5 +1,22 @@
 # Walkthrough — Instantiating vibetastic-pm for a New Project
 
+## TL;DR
+
+vibetastic-pm is a Claude Code PM orchestrator. You describe your project; it drives four agents — Designer → Architect → Tech Lead (on demand) → OpenCode — from spec through working code. Your only required inputs are:
+
+- Answer 6 questions at the start (SPEC interview)
+- Type `approved` once (SPEC approval)
+- Type `proceed` three times (once per stage)
+
+Everything else — subagent dispatch, model selection, retries, state management, PR opening — runs autonomously. If your session crashes, restart `claude` from the `-pm/` directory and it resumes from where it left off.
+
+**Framework updates** (without touching project files):
+```bash
+git subtree pull --prefix framework framework main --squash
+```
+
+---
+
 This guide walks through setting up and running the PM framework on a new project from first invocation to completed implementation.
 
 ---
@@ -19,18 +36,19 @@ mkdir my-app
 # Create the pm directory as its own git repo
 mkdir my-app-pm && cd my-app-pm && git init
 
+# Add vibetastic-pm as a named remote so future pulls are one command
+git remote add framework https://github.com/Timeteo/vibetastic-pm.git
+
 # Pull vibetastic-pm framework files into a framework/ subdirectory
-git subtree add --prefix framework \
-  https://github.com/Timeteo/vibetastic-pm main --squash
+git subtree add --prefix framework framework main --squash
 
 # Symlink CLAUDE.md to the root so Claude Code auto-loads it
 ln -s framework/CLAUDE.md CLAUDE.md
 ```
 
-To pull framework updates later:
+To pull framework updates later (project files are never touched):
 ```bash
-git subtree pull --prefix framework \
-  https://github.com/Timeteo/vibetastic-pm main --squash
+git subtree pull --prefix framework framework main --squash
 ```
 
 Project-specific files (`SPEC.md`, `PLAN.md`, `TASK_LOG.md`, `prompts/design-spec.md`, `prompts/build-spec.md`) live in the root alongside the `framework/` directory — they are not tracked by upstream.
@@ -264,7 +282,7 @@ If OpenCode exits non-zero on T003:
 
 ---
 
-## 11. Recovery After a Crash
+## 12. Recovery After a Crash
 
 If Claude Code exits mid-run (context reset, terminal closed, process killed), restart from the same directory:
 
