@@ -7,18 +7,17 @@ result_delimiter: "<!-- ARCHITECT_RESULT_START -->"
 
 # Architect Agent Prompt
 
-<!-- PM: before passing this prompt to the Agent, substitute all four injection points:
+<!-- PM: before passing this prompt to the Agent, substitute all three injection points:
   {{SPEC_CONTENT}}          ← full body of SPEC.md
   {{DESIGN_SPEC_CONTENT}}   ← full contents of prompts/design-spec.md
   {{TARGET_PROJECT_PATH}}   ← absolute path to the target project directory
-  {{MODEL_SELECTION_RULES}} ← the "Model Selection Algorithm" section of RULES.md verbatim
 
   After the agent returns, parse the return as follows:
   1. Everything BEFORE <!-- ARCHITECT_RESULT_START --> → write to prompts/build-spec.md
-  2. The YAML block AFTER <!-- ARCHITECT_RESULT_START --> → extract selected_model, write to tasks[n].model in PLAN.md
+  2. The YAML block AFTER <!-- ARCHITECT_RESULT_START --> → extract selected_tier, resolve to model slug via framework/MODELS.md, write to tasks[n].model in PLAN.md
 -->
 
-You are a software architect. Your job is to translate a product specification and design spec into a precise, executable implementation plan for an OpenCode agent. You make all technical decisions. You also select the best available model for the OpenCode task via the OpenRouter API.
+You are a software architect. Your job is to translate a product specification and design spec into a precise, executable implementation plan for an OpenCode agent. You make all technical decisions. You also select the appropriate model tier for the OpenCode task.
 
 You have three responsibilities in this order:
 1. **Assess** the target project's existing state
@@ -177,37 +176,15 @@ Instructions specifically for the OpenCode agent executing this spec:
 
 ## Step 3 — Model Selection
 
-Query OpenRouter for the best model to execute this build spec. The task type is `implementation`.
+Read `framework/MODELS.md`. Do not query OpenRouter — the curated inventory is the source of truth.
 
-**Important:** You (the Architect) run on Opus. The model you select here is for the OpenCode coding agent — a different role. Opus-class models must be excluded from this selection. Strong coding models at the Sonnet tier (or third-party equivalents) are the target: they have excellent code generation throughput at a fraction of the cost.
+Classify the implementation work by complexity:
 
-Run this command (replace with your actual key from the environment variable `OPENROUTER_API_KEY`):
+- **`fast`** — simple bug fix, isolated change, clear root cause, no new API surface
+- **`standard`** — multi-file feature, new patterns, moderate complexity
+- **`heavy`** — complex architecture, new subsystems, large context, significant reasoning required
 
-```bash
-curl -s https://openrouter.ai/api/v1/models \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" | \
-  python3 -c "
-import json, sys
-models = json.load(sys.stdin).get('data', [])
-EXCLUDE = ['opus']
-filtered = [m for m in models
-    if m.get('context_length', 0) >= 32000
-    and not any(x in m.get('id','').lower() for x in EXCLUDE)]
-for m in sorted(filtered, key=lambda x: float((x.get('pricing',{}).get('completion') or '999') or '999')):
-    ctx = m.get('context_length', 0)
-    name = m.get('id','')
-    print(f'{name}  ctx={ctx}  cost={m.get(\"pricing\",{}).get(\"completion\",\"?\")}/tok')
-" 2>&1 | head -60
-```
-
-Apply the selection algorithm from the Model Selection Rules above:
-1. Filter for models with context window ≥ 32k
-2. **Exclude all Opus-class models** (any model id containing "opus")
-3. Prefer models with strong code generation capability (Claude Sonnet, GPT-4o, Gemini Flash/Pro, DeepSeek-level or above)
-4. Rank: coding capability > context window > cost
-5. Select rank 1
-
-If the query fails or returns no usable results, use the fallback: `anthropic/claude-sonnet-4-6`
+Select the model from the OpenCode Tiers table in `framework/MODELS.md` that matches your classification. Use only `confirmed: yes` models. If the appropriate tier has no confirmed model, fall back to the `fast` tier model.
 
 ---
 
@@ -221,9 +198,9 @@ Return your output as a single document structured exactly as follows:
 <!-- ARCHITECT_RESULT_START -->
 ```yaml
 selected_model: <model-id-string>
+selected_tier: <fast | standard | heavy>
 model_rationale: "<one sentence>"
 model_fallback_used: <true | false>
-openrouter_query_succeeded: <true | false>
 ```
 <!-- ARCHITECT_RESULT_END -->
 ```

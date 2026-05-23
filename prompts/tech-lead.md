@@ -141,15 +141,15 @@ Specify commits — one per logical unit. For each:
 
 ---
 
-## Step 3 — Select OpenCode Model
+## Step 3 — Select OpenCode Tier
 
-Based on the complexity of this task, recommend a model for the OpenCode agent:
+Based on the complexity of this task, recommend a tier for the OpenCode agent. The PM will map the tier to a confirmed model slug from `framework/MODELS.md`.
 
-- **Simple bug fix** (isolated change, clear root cause, no API surface changes): `google/gemini-2.5-flash`
-- **Multi-file feature or refactor** (new patterns, several files, moderate complexity): `google/gemini-2.5-flash`
-- **Complex architectural change** (new subsystems, protocol changes, significant reasoning required): `anthropic/claude-sonnet-4-6`
+- **`fast`** — simple bug fix, isolated change, clear root cause, no API surface changes
+- **`standard`** — multi-file feature or refactor, new patterns, several files, moderate complexity
+- **`heavy`** — complex architectural change, new subsystems, protocol changes, significant reasoning required
 
-State your recommendation and one-sentence rationale.
+State your tier recommendation and one-sentence rationale.
 
 ---
 
@@ -168,8 +168,8 @@ task_title: "<title matching the section header above>"
 branch_name: "<exact branch name from Section 1>"
 issue_refs: "<comma-separated issue numbers, or null>"
 depends_on: [<task ids that must be done first, or empty>]
-suggested_model: "<model id>"
-model_rationale: "<one sentence>"
+suggested_tier: <fast | standard | heavy>
+tier_rationale: "<one sentence>"
 ```
 <!-- TECH_LEAD_RESULT_END -->
 ```

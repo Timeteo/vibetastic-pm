@@ -139,15 +139,14 @@ After return:
 
 ### Architect
 
-Read `framework/prompts/architect.md`. Substitute the four injection points, then spawn a fresh Agent with the rendered prompt:
+Read `framework/prompts/architect.md`. Substitute the three injection points, then spawn a fresh Agent with the rendered prompt:
 - `{{SPEC_CONTENT}}` → full body of `SPEC.md`
 - `{{DESIGN_SPEC_CONTENT}}` → full contents of `prompts/design-spec.md`
 - `{{TARGET_PROJECT_PATH}}` → absolute path to `../<project-name>/`
-- `{{MODEL_SELECTION_RULES}}` → the "Model Selection Algorithm" section of `RULES.md` verbatim
 
 After return, parse the output on the delimiter `<!-- ARCHITECT_RESULT_START -->`:
 1. Everything **before** the delimiter → write to `prompts/build-spec.md`
-2. The YAML block **after** the delimiter → extract `selected_model`, write to `tasks[n].model` in PLAN.md; log `model_fallback_used` if true
+2. The YAML block **after** the delimiter → extract `selected_tier`, read `framework/MODELS.md` to resolve the model slug, write to `tasks[n].model` in PLAN.md; log `model_fallback_used` if true
 
 Then:
 - Append `model_selected`, `agent_returned`, `task_completed` to TASK_LOG
@@ -182,7 +181,7 @@ After return, parse the output on the delimiter `<!-- TECH_LEAD_RESULT_START -->
    - `branch_name` → store in `notes`
    - `issue_refs` → store in `notes`
    - `depends_on` → `depends_on`
-   - `suggested_model` → `model`
+   - `suggested_tier` → read `framework/MODELS.md`, look up the model slug for that tier, write to `model`
    - Assign the next available task id
    - Set `status: pending`, `agent: opencode`, `failure_count: 0`
 

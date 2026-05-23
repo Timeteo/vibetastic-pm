@@ -83,58 +83,15 @@ Flow:
 
 ---
 
-## Model Selection Algorithm
+## Model Selection
 
-Used by the Architect agent when preparing an OpenCode invocation.
+All model assignments are defined in `framework/MODELS.md`. That file is the single source of truth — do not hardcode model slugs in prompts or instructions.
 
-### Model Tier Policy
+**For agent roles** (Designer, Architect, Tech Lead): use the model in the Agent Roles table.
 
-Two tiers, non-negotiable:
+**For OpenCode tasks**: the Tech Lead recommends a tier (`fast` / `standard` / `heavy`) in its output metadata. The PM reads `framework/MODELS.md` and writes the corresponding model slug to `tasks[n].model` in PLAN.md before dispatching. For Stage 2 Architect-selected tasks, the Architect classifies the task complexity and picks a tier directly.
 
-| Role | Model class | Rationale |
-|---|---|---|
-| Designer agent | Opus (latest) | Creative and structural reasoning at planning stage |
-| Architect agent | Opus (latest) | Architecture decisions require peak complex reasoning |
-| OpenCode invocation | Best coding-optimized model (Sonnet-class or equivalent) | Code generation is throughput work — Opus is overkill and expensive for keystrokes |
-
-Opus-class models are **excluded** from OpenCode model selection. The selection algorithm below applies only to the OpenCode invocation model, and must filter out Opus before ranking.
-
-Fallback for Designer and Architect agents (if API unavailable): `claude-opus-4-7`  
-Fallback for OpenCode: `claude-sonnet-4-6`
-
-### Step 1 — Classify task type
-
-| Task type | Capability requirements |
-|---|---|
-| `design` | strong reasoning, creativity, instruction-following |
-| `architecture` | complex reasoning, large context window |
-| `implementation` | code generation, language-specific capability |
-| `review` | analysis, attention to detail, long context |
-
-### Step 2 — Query OpenRouter
-
-```
-GET https://openrouter.ai/api/v1/models
-```
-
-Filter models where:
-- The model's reported capabilities match the requirements for the task type
-- Context window ≥ minimum required (default: 32k for implementation, 128k for architecture/review)
-
-### Step 3 — Rank and select
-
-Rank filtered models by priority:
-1. Capability match score (higher = better)
-2. Context window (larger = better, up to task requirement)
-3. Cost per token (lower = better)
-
-Select rank 1. Write selected model id to `tasks[n].model` in PLAN.md before dispatching.
-
-### Step 4 — Fallback
-
-If OpenRouter query fails or returns no matching models:
-- Log `model_selection_failed` event in TASK_LOG.md with reason
-- Use fallback: `google/gemini-2.5-flash` for OpenCode invocations (never Opus — see Model Tier Policy above)
+**Fallback**: if the selected model is unavailable, use the `fast` tier model from `framework/MODELS.md`.
 
 ---
 
