@@ -38,7 +38,9 @@ The PM orchestrator is the **sole writer** to all state files. Subagents receive
 | PLAN.md | PM | PM |
 | RULES.md | Human (setup) | PM, all agents |
 | TASK_LOG.md | PM (append-only) | PM (recovery) |
-| prompts/* | PM (from agent output) | Architect, OpenCode |
+| prompts/design-spec.md | PM (from Designer output) | Architect, Tech Lead |
+| prompts/build-spec.md | PM (from Architect output, Stage 2 only — never modified after) | Tech Lead |
+| prompts/task-T0XX.md | PM (awk extract for Architect tasks; direct write for Tech Lead tasks) | OpenCode |
 | framework/* | git subtree (read-only) | PM, all agents |
 
 ---

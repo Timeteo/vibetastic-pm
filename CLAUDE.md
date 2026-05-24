@@ -145,7 +145,7 @@ Read `framework/prompts/architect.md`. Substitute the three injection points, th
 - `{{TARGET_PROJECT_PATH}}` → absolute path to `../<project-name>/`
 
 After return, parse the output on the delimiter `<!-- ARCHITECT_RESULT_START -->`:
-1. Everything **before** the delimiter → write to `prompts/build-spec.md`
+1. Everything **before** the delimiter → write to `prompts/build-spec.md`. **This is the only time build-spec.md is written. It is the permanent architectural preamble — never append to it again.**
 2. The YAML block **after** the delimiter → extract `selected_tier`, read `framework/MODELS.md` to resolve the model slug, write to `tasks[n].model` in PLAN.md; log `model_fallback_used` if true
 
 Then:
@@ -169,13 +169,13 @@ Do not create a new PLAN.md task without first running the Tech Lead (unless the
 
 Read `framework/prompts/tech-lead.md`. Substitute the injection points, then spawn a fresh Agent with the rendered prompt:
 - `{{ISSUE_DESCRIPTION}}` → the bug report or requirement as described by the user (or PM's analysis of a failure)
-- `{{BUILD_SPEC_CONTENT}}` → full contents of `prompts/build-spec.md`
+- `{{BUILD_SPEC_CONTENT}}` → full contents of `prompts/build-spec.md` (the architectural preamble — tech stack, data model, conventions; written once by the Architect, never modified after Stage 2)
 - `{{PLAN_SUMMARY}}` → one line per task from PLAN.md: id, title, status, notes
 - `{{TARGET_PROJECT_PATH}}` → absolute path to `../<project-name>/`
 - `{{ERROR_OUTPUT}}` → full stderr/stdout from a failed task, or "none"
 
 After return, parse the output on the delimiter `<!-- TECH_LEAD_RESULT_START -->`:
-1. Everything **before** the delimiter → append to `prompts/build-spec.md` as a new section
+1. Everything **before** the delimiter → write to `prompts/task-T0XX.md` using the assigned task id. **Do not append to `prompts/build-spec.md`.**
 2. The YAML block **after** the delimiter → extract fields and create a new task in PLAN.md:
    - `task_title` → `title`
    - `branch_name` → store in `notes`
@@ -197,16 +197,13 @@ Do not spawn an Agent. Execute via the dispatch wrapper — this avoids shell su
 
 **`framework/dispatch.sh` is read-only framework infrastructure. Never modify it. Never revert it. If it does not work as expected, report the issue to the user — do not edit the file.**
 
-**Before calling framework/dispatch.sh, extract a task-scoped prompt file.** Do not pass the full `build-spec.md` — it accumulates all historical task sections and is far too large. Extract only what OpenCode needs:
+**OpenCode always receives a task-scoped file at `prompts/task-T0XX.md`.** How it gets there depends on the task source:
 
-1. **Preamble** — everything before the first `## T` section (critical instructions + project state)
-2. **`## OpenCode Execution Notes`** section — general execution guidance
-3. **`## T<id>`** section — the current task only
-
-Use this awk command, substituting the actual task id:
+- **Tech Lead tasks**: the PM writes the task file directly from the Tech Lead's output (everything before the delimiter). No extraction needed — pass the file straight to dispatch.
+- **Architect-generated tasks** (Stage 3 initial tasks): the task spec is embedded in `prompts/build-spec.md` as a `## T<id>` section. Extract it with awk:
 
 ```bash
-TASK_ID="<tasks[n].id>"   # e.g. T011
+TASK_ID="<tasks[n].id>"   # e.g. T003
 TASK_PROMPT="prompts/task-${TASK_ID}.md"
 
 awk -v id="${TASK_ID}" '
@@ -222,9 +219,7 @@ mode == "preamble" || mode == "notes" || mode == "task" { print }
 ' prompts/build-spec.md > "${TASK_PROMPT}"
 ```
 
-The last section (the current task) reads to EOF if no following `## T` section exists — this is correct behavior. The per-task file also serves as a permanent audit trail of exactly what spec each OpenCode invocation received.
-
-Then dispatch using the extracted file:
+Then dispatch using the task file:
 
 ```bash
 bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" 2>&1
