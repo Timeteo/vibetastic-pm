@@ -29,12 +29,7 @@ cat > .claude/settings.json <<EOF
 {
   "permissions": {
     "allow": [
-      "Bash(bash framework/dispatch.sh *)",
-      "Bash(opencode *)",
-      "Bash(eval \"\$(~/.ssh/gh-agent-token.sh)\"*)",
-      "Bash(git *)",
-      "Bash(gh *)",
-      "Bash(bash *)",
+      "Bash(*)",
       "Read(${CODE_DIR}/**)",
       "Edit(${CODE_DIR}/**)",
       "Write(${CODE_DIR}/**)",
