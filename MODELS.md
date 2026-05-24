@@ -33,11 +33,11 @@ Architect classifies the task and picks a tier directly.
 
 | Tier | Model | Confirmed | Use When |
 |------|-------|-----------|----------|
-| `fast` | `google/gemini-2.5-flash` | yes | Simple bug fix, isolated change, clear root cause, no API surface changes |
-| `standard` | `anthropic/claude-sonnet-4-6` | yes | Multi-file feature, new patterns, moderate complexity |
-| `heavy` | `google/gemini-2.5-pro` | no | Complex architecture, new subsystems, large context, significant reasoning |
+| `fast` | `google/gemini-2.5-pro` | yes | Simple bug fix, isolated change, clear root cause, no API surface changes |
+| `standard` | `google/gemini-2.5-pro` | yes | Multi-file feature, new patterns, moderate complexity |
+| `heavy` | `anthropic/claude-sonnet-4-6` | yes | Complex architecture, new subsystems, large context, significant reasoning |
 
-**Fallback** (if selected model unavailable): `google/gemini-2.5-flash`
+**Fallback** (if selected model unavailable): `google/gemini-2.5-pro`
 
 ---
 
@@ -47,6 +47,7 @@ Models to evaluate for future tier assignments. Move to the table above once con
 
 | Model | Potential tier | Notes |
 |-------|---------------|-------|
+| `google/gemini-2.5-flash` | fast | Removed — silent output truncation on large tasks |
 | `openai/o4-mini` | heavy | Strong reasoning + coding |
 | `deepseek/deepseek-r1` | heavy | Cost-effective reasoning |
 | `qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap |
