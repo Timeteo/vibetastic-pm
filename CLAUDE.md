@@ -48,6 +48,10 @@ When invoked, run this before doing anything else:
 eval "$(~/.ssh/gh-agent-token.sh)"
 ```
 
+Then check for `PROJECT.md`. If it does not exist, **run onboarding before anything else** (see Onboarding below).
+
+Read `PROJECT.md` to get the code directory path — use it wherever `<project-code-dir>` appears in these instructions.
+
 Then determine current project state:
 
 1. Read `SPEC.md` — check `status`
@@ -58,12 +62,47 @@ Then branch:
 
 | State | Action |
 |---|---|
+| `PROJECT.md` missing | Run Onboarding (see below) |
 | SPEC doesn't exist | Begin SPEC interview (see below) |
 | SPEC `status: draft` | **Gate 1** — present spec for approval |
 | SPEC `status: approved`, PLAN empty | Generate PLAN (see below) |
 | PLAN has tasks `in_progress` | A prior session was interrupted — mark them `failed` (`failure_count +1`), log `task_interrupted`, then re-evaluate |
 | PLAN has ready tasks, current stage `in_progress` | Resume dispatch loop |
 | Awaiting Gate 3 (stage done, next stage `pending`) | Re-present Gate 3 prompt, wait for user |
+
+---
+
+## Onboarding
+
+Run only when `PROJECT.md` does not exist. Goal: capture project paths and write `PROJECT.md`. Note: `framework/setup.sh` does this automatically if run before the first session — check whether it has already been run before asking.
+
+Ask the user (one message):
+- What is the project name?
+- What is the absolute path to the code directory?
+
+Then write `PROJECT.md`:
+
+```markdown
+---
+project: <project-name>
+setup_at: <ISO8601>
+---
+
+## Project Paths
+
+| Key | Path |
+|-----|------|
+| PM directory | `<absolute-path-to-this-pm-dir>` |
+| Code directory | `<absolute-path-to-code-dir>` |
+
+## Notes
+
+<!-- Add any project-specific notes here for future PM sessions. -->
+```
+
+Also check whether `.claude/settings.json` exists. If not, tell the user to run `bash framework/setup.sh <project-name> <code-dir>` from the PM directory and restart — the settings file must exist before the session to avoid permission prompts.
+
+Append `onboarding_complete` to TASK_LOG. Then proceed to SPEC Interview.
 
 ---
 

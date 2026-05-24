@@ -10,6 +10,11 @@ vibetastic-pm is a Claude Code PM orchestrator. You describe your project; it dr
 
 Everything else — subagent dispatch, model selection, retries, state management, PR opening — runs autonomously. If your session crashes, restart `claude` from the `-pm/` directory and it resumes from where it left off.
 
+**One-time setup** (run before first `claude` invocation):
+```bash
+bash framework/setup.sh <project-name> /absolute/path/to/code-dir
+```
+
 **Framework updates** (without touching project files):
 ```bash
 git subtree pull --prefix framework framework main --squash
@@ -44,6 +49,9 @@ git subtree add --prefix framework framework main --squash
 
 # Symlink CLAUDE.md to the root so Claude Code auto-loads it
 ln -s framework/CLAUDE.md CLAUDE.md
+
+# Run one-time project setup (writes .claude/settings.json and PROJECT.md)
+bash framework/setup.sh my-app /absolute/path/to/my-app
 ```
 
 To pull framework updates later (project files are never touched):
@@ -51,7 +59,7 @@ To pull framework updates later (project files are never touched):
 git subtree pull --prefix framework framework main --squash
 ```
 
-Project-specific files (`SPEC.md`, `PLAN.md`, `TASK_LOG.md`, `prompts/design-spec.md`, `prompts/build-spec.md`) live in the root alongside the `framework/` directory — they are not tracked by upstream.
+Project-specific files (`SPEC.md`, `PLAN.md`, `TASK_LOG.md`, `PROJECT.md`, `prompts/`) live in the root alongside the `framework/` directory — they are not tracked by upstream.
 
 ### Simple alternative: cp -r (no upstream tracking)
 
