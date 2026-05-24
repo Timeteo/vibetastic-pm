@@ -236,8 +236,19 @@ The `framework/dispatch.sh` script handles the `opencode run` invocation. It is 
 Capture exit code and full stdout/stderr.
 
 After execution:
-- **Exit 0:** open a PR, then mark task `done` (see PR Opening below)
-- **Exit non-0:** handle as task failure (see Failure Handling below)
+
+**Exit 0 — run staged-change check before opening PR:**
+
+```bash
+git -C ../<project-name>/ diff --cached --quiet
+git -C ../<project-name>/ status --short
+```
+
+- If staged (uncommitted) changes exist: OpenCode exited cleanly but did not finish committing. Spawn a subagent using `anthropic/claude-sonnet-4-6` with instructions to commit all staged changes in the target project with an appropriate message, then proceed to PR Opening.
+- If working tree is clean and all commits are present: proceed to PR Opening normally.
+- If nothing was committed at all (no new commits vs. branch base): treat as task failure — do not open a PR on an empty push.
+
+**Exit non-0:** handle as task failure (see Failure Handling below)
 
 ### PR Opening
 

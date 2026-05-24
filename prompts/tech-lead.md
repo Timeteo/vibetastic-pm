@@ -1,7 +1,7 @@
 ---
 agent: tech-lead
 version: "1.0"
-output_target: prompts/build-spec.md (append)
+output_target: prompts/task-T0XX.md (new file per task)
 result_delimiter: "<!-- TECH_LEAD_RESULT_START -->"
 ---
 
@@ -117,6 +117,8 @@ Do not list files that will not change. If you are unsure whether a file needs t
 ---
 
 ### Section 3 — Implementation
+
+**Before generating any edit target, read the current file contents.** Do not use code shown elsewhere in this spec as the edit target — the file may have changed since this spec was written. Always derive old_string from a live file read immediately before writing the step.
 
 Precise, ordered steps. Each step must be independently coherent — if OpenCode stops after this step, the project should be in a valid (if incomplete) state.
 

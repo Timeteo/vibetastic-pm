@@ -39,6 +39,8 @@ Architect classifies the task and picks a tier directly.
 
 **Fallback** (if selected model unavailable): `google/gemini-2.5-pro`
 
+Note: `fast` and `standard` intentionally map to the same model. The tier distinction is preserved so a cheaper model can be slotted into `fast` once confirmed (see Candidates). The Tech Lead's tier recommendation still matters — it signals task complexity even when the model is the same.
+
 ---
 
 ## Candidates
