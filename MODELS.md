@@ -19,9 +19,9 @@ These models are fixed per role and are not subject to tier selection.
 
 | Role | Model | Confirmed | Notes |
 |------|-------|-----------|-------|
-| Designer | `anthropic/claude-opus-4-7` | yes | Creative and structural reasoning at planning stage |
-| Architect | `anthropic/claude-opus-4-7` | yes | Architecture decisions require peak complex reasoning |
-| Tech Lead | `anthropic/claude-sonnet-4-6` | yes | Code reading and spec writing |
+| Designer | `openrouter/anthropic/claude-opus-4-7` | yes | Creative and structural reasoning at planning stage |
+| Architect | `openrouter/anthropic/claude-opus-4-7` | yes | Architecture decisions require peak complex reasoning |
+| Tech Lead | `openrouter/anthropic/claude-sonnet-4-6` | yes | Code reading and spec writing |
 
 ---
 
@@ -33,11 +33,11 @@ Architect classifies the task and picks a tier directly.
 
 | Tier | Model | Confirmed | Use When |
 |------|-------|-----------|----------|
-| `fast` | `google/gemini-2.5-pro` | yes | Simple bug fix, isolated change, clear root cause, no API surface changes |
-| `standard` | `google/gemini-2.5-pro` | yes | Multi-file feature, new patterns, moderate complexity |
-| `heavy` | `anthropic/claude-sonnet-4-6` | yes | Complex architecture, new subsystems, large context, significant reasoning |
+| `fast` | `openrouter/google/gemini-2.5-pro` | yes | Simple bug fix, isolated change, clear root cause, no API surface changes |
+| `standard` | `openrouter/google/gemini-2.5-pro` | yes | Multi-file feature, new patterns, moderate complexity |
+| `heavy` | `openrouter/anthropic/claude-sonnet-4-6` | yes | Complex architecture, new subsystems, large context, significant reasoning |
 
-**Fallback** (if selected model unavailable): `google/gemini-2.5-pro`
+**Fallback** (if selected model unavailable): `openrouter/google/gemini-2.5-pro`
 
 Note: `fast` and `standard` intentionally map to the same model. The tier distinction is preserved so a cheaper model can be slotted into `fast` once confirmed (see Candidates). The Tech Lead's tier recommendation still matters — it signals task complexity even when the model is the same.
 
@@ -49,7 +49,7 @@ Models to evaluate for future tier assignments. Move to the table above once con
 
 | Model | Potential tier | Notes |
 |-------|---------------|-------|
-| `google/gemini-2.5-flash` | fast | Removed — silent output truncation on large tasks |
+| `openrouter/google/gemini-2.5-flash` | fast | Removed — silent output truncation on large tasks |
 | `openai/o4-mini` | heavy | Strong reasoning + coding |
 | `deepseek/deepseek-r1` | heavy | Cost-effective reasoning |
 | `qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap |
