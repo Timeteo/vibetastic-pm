@@ -50,7 +50,7 @@ Models to evaluate for future tier assignments. Move to the table above once con
 | Model | Potential tier | Notes |
 |-------|---------------|-------|
 | `openrouter/google/gemini-2.5-flash` | fast | Removed — silent output truncation on large tasks |
-| `openai/o4-mini` | heavy | Strong reasoning + coding |
-| `deepseek/deepseek-r1` | heavy | Cost-effective reasoning |
-| `qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap |
-| `anthropic/claude-haiku-4-5-20251001` | fast | Fast and cheap, needs coding eval |
+| `openrouter/openai/o4-mini` | heavy | Strong reasoning + coding |
+| `openrouter/deepseek/deepseek-r1` | heavy | Cost-effective reasoning |
+| `openrouter/qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap |
+| `openrouter/anthropic/claude-haiku-4-5-20251001` | fast | Fast and cheap, needs coding eval |
