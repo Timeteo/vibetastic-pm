@@ -42,7 +42,13 @@ Everything else — task sequencing, subagent dispatch, model selection, state w
 
 ## Startup Sequence
 
-When invoked, determine current project state before doing anything:
+When invoked, run this before doing anything else:
+
+```bash
+eval "$(~/.ssh/gh-agent-token.sh)"
+```
+
+Then determine current project state:
 
 1. Read `SPEC.md` — check `status`
 2. Read `PLAN.md` — check stage and task statuses
