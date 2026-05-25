@@ -8,14 +8,15 @@
 
 set -e
 
-if [ $# -ne 2 ]; then
-  echo "Usage: bash framework/setup.sh <project-name> <absolute-path-to-code-dir>"
-  echo "Example: bash framework/setup.sh hometastic /Users/tim/Developer/hometastic-code"
+if [ $# -ne 3 ]; then
+  echo "Usage: bash framework/setup.sh <project-name> <absolute-path-to-code-dir> <org/repo>"
+  echo "Example: bash framework/setup.sh hometastic /Users/tim/Developer/hometastic-code Fricktastic/hometastic-code"
   exit 1
 fi
 
 PROJECT_NAME="$1"
 CODE_DIR="$2"
+ISSUE_REPO="$3"
 PM_DIR="$(pwd)"
 
 if [ ! -d "$CODE_DIR" ]; then
@@ -56,6 +57,7 @@ setup_at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 |-----|------|
 | PM directory | \`${PM_DIR}\` |
 | Code directory | \`${CODE_DIR}\` |
+| Issue repo | \`${ISSUE_REPO}\` |
 
 ## Notes
 

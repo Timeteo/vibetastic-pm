@@ -291,10 +291,13 @@ git -C ../<project-name>/ status --short
 
 ### PR Opening
 
-After a successful OpenCode exit, **you (the PM orchestrator) run `gh pr create`** from the `-pm/` directory to open a PR on behalf of the completed task. OpenCode does not open PRs — that is your responsibility. Open the PR before marking the task done:
+After a successful OpenCode exit, **you (the PM orchestrator) run `gh pr create`** from the `-pm/` directory to open a PR on behalf of the completed task. OpenCode does not open PRs — that is your responsibility. Open the PR before marking the task done.
+
+Read `issue_repo` from the `PROJECT.md` paths table — this is the GitHub repo (`org/repo`) where issues and PRs live. Pass it via `--repo` on all `gh issue` and `gh pr create` calls so that `Closes #n` auto-closes the correct issue.
 
 ```bash
 gh pr create \
+  --repo <issue_repo> \
   --title "<task title>" \
   --body "$(cat <<'EOF'
 ## Summary
