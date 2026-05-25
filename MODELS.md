@@ -33,13 +33,13 @@ Architect classifies the task and picks a tier directly.
 
 | Tier | Model | Confirmed | Use When |
 |------|-------|-----------|----------|
-| `fast` | `openrouter/google/gemini-2.5-pro` | yes | Simple bug fix, isolated change, clear root cause, no API surface changes |
+| `fast` | `openrouter/google/gemini-2.5-flash` | yes | Simple bug fix, isolated change, clear root cause, no API surface changes |
 | `standard` | `openrouter/google/gemini-2.5-pro` | yes | Multi-file feature, new patterns, moderate complexity |
 | `heavy` | `openrouter/anthropic/claude-sonnet-4-6` | yes | Complex architecture, new subsystems, large context, significant reasoning |
 
 **Fallback** (if selected model unavailable): `openrouter/google/gemini-2.5-pro`
 
-Note: `fast` and `standard` intentionally map to the same model. The tier distinction is preserved so a cheaper model can be slotted into `fast` once confirmed (see Candidates). The Tech Lead's tier recommendation still matters — it signals task complexity even when the model is the same.
+Note: `fast` uses Gemini 2.5 Flash (cheaper, ~2K lines output capacity — appropriate for atomic units of work). `standard` uses Gemini 2.5 Pro. The Tech Lead's tier recommendation determines which model runs.
 
 ---
 
@@ -49,7 +49,6 @@ Models to evaluate for future tier assignments. Move to the table above once con
 
 | Model | Potential tier | Notes |
 |-------|---------------|-------|
-| `openrouter/google/gemini-2.5-flash` | fast | Removed — silent output truncation on large tasks |
 | `openrouter/openai/o4-mini` | heavy | Strong reasoning + coding |
 | `openrouter/deepseek/deepseek-r1` | heavy | Cost-effective reasoning |
 | `openrouter/qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap |
