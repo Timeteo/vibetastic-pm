@@ -272,7 +272,22 @@ The PM appends the Tech Lead's spec to `prompts/build-spec.md`, creates the new 
 
 ---
 
-## 11. Gate 2 — Task Double-Failure
+## 11. Major Design Revisions
+
+The PM's Designer agent is a one-shot invocation — good for initial design and discrete new screens, but not suited for iterative, exploratory design work where you want to go back and forth on layout, interaction model, or visual direction.
+
+For major design revision sessions, bypass the PM entirely:
+
+1. Open a **separate Claude session** in the `-pm/` directory (not the PM orchestrator)
+2. At the start of that session, read `framework/prompts/designer.md`, `SPEC.md`, and the current `prompts/design-spec.md`
+3. Work interactively — revisions, alternatives, open questions — until you're satisfied
+4. Write the final result directly to `prompts/design-spec.md`
+5. Return to the PM session and tell it: **"design-spec.md has been updated manually"** — the PM will skip the Designer and pass the updated file straight to the Tech Lead
+
+---
+
+## 12. Gate 2 — Task Double-Failure
+
 
 Gate 2 does not appear on the happy path. It fires only when a task fails twice.
 
@@ -294,7 +309,7 @@ If OpenCode exits non-zero on T003:
 
 ---
 
-## 12. Recovery After a Crash
+## 13. Recovery After a Crash
 
 If Claude Code exits mid-run (context reset, terminal closed, process killed), restart from the same directory:
 
