@@ -81,7 +81,7 @@ After return, parse on delimiter `<!-- TECH_LEAD_RESULT_START -->`:
    - `task_title` → `title`
    - `branch_name`, `issue_refs` → store in `notes`
    - `depends_on` → `depends_on`
-   - `suggested_tier` → look up model slug in `framework/MODELS.md`, write to `model`
+   - `suggested_tier` → look up `model` and `fallback` columns in `framework/MODELS.md` for that tier; write to `model` and `fallback_model`
    - Assign next available task id
    - Set `status: pending`, `agent: opencode`, `failure_count: 0`
 
@@ -119,11 +119,15 @@ mode == "preamble" || mode == "notes" || mode == "task" { print }
 ' prompts/build-spec.md > "${TASK_PROMPT}"
 ```
 
+Look up `tasks[n].model` and `tasks[n].fallback_model` in PLAN.md (fallback_model is written from the `fallback` column in `framework/MODELS.md` at plan generation time).
+
 Dispatch:
 
 ```bash
-bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" 2>&1
+bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" "<tasks[n].fallback_model>" 2>&1
 ```
+
+If `fallback_model` is empty, omit the 4th argument. dispatch.sh will try the primary only.
 
 Capture exit code and full stdout/stderr.
 

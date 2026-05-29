@@ -31,15 +31,18 @@ The Tech Lead recommends a tier (`fast` / `standard` / `heavy`) in its output me
 The PM maps that tier to the model below. For Stage 2 Architect-selected tasks, the
 Architect classifies the task and picks a tier directly.
 
-| Tier | Model | Confirmed | Use When |
-|------|-------|-----------|----------|
-| `fast` | `openrouter/google/gemini-2.5-flash` | yes | Simple bug fix, isolated change, clear root cause, no API surface changes |
-| `standard` | `openrouter/google/gemini-2.5-pro` | yes | Multi-file feature, new patterns, moderate complexity |
-| `heavy` | `openrouter/anthropic/claude-sonnet-4-6` | yes | Complex architecture, new subsystems, large context, significant reasoning |
+The PM passes both `model` and `fallback_model` to dispatch.sh. If the primary exits
+non-zero, dispatch.sh retries once with the fallback before returning failure to the PM.
 
-**Fallback** (if selected model unavailable): `openrouter/google/gemini-2.5-pro`
+| Tier | Model | Fallback | Confirmed | Use When |
+|------|-------|----------|-----------|----------|
+| `fast` | `openrouter/deepseek/deepseek-v4-flash` | `openrouter/google/gemini-3-flash-preview` | no | Simple bug fix, isolated change, clear root cause, no API surface changes |
+| `standard` | `openrouter/google/gemini-3.5-flash` | `openrouter/deepseek/deepseek-v4-flash` | no | Multi-file feature, new patterns, moderate complexity |
+| `heavy` | `openrouter/anthropic/claude-opus-4-7` | `openrouter/openai/gpt-5.5` | no | Complex architecture, new subsystems, large context, significant reasoning |
 
-Note: `fast` uses Gemini 2.5 Flash (cheaper, ~2K lines output capacity — appropriate for atomic units of work). `standard` uses Gemini 2.5 Pro. The Tech Lead's tier recommendation determines which model runs.
+**SWE-bench Verified scores (May 2026):** fast primary 79%, standard primary 81%, heavy primary 87.6%
+
+Mark `confirmed` after testing each tier end-to-end in a real session.
 
 ---
 
@@ -49,7 +52,18 @@ Models to evaluate for future tier assignments. Move to the table above once con
 
 | Model | Potential tier | Notes |
 |-------|---------------|-------|
-| `openrouter/openai/o4-mini` | heavy | Strong reasoning + coding |
-| `openrouter/deepseek/deepseek-r1` | heavy | Cost-effective reasoning |
+| `openrouter/deepseek/deepseek-v4-pro` | standard/heavy | 80.6% SWE-bench, open-weight, strong reasoning |
+| `openrouter/openai/gpt-5.4` | standard | 73.9% coding score, cheaper than 5.5 |
 | `openrouter/qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap |
-| `openrouter/anthropic/claude-haiku-4-5-20251001` | fast | Fast and cheap, needs coding eval |
+
+---
+
+## Previous Tier Models (pre-May 2026)
+
+Retained for reference and rollback. Tag `pre-fallback-models` points to the last commit using these.
+
+| Tier | Model |
+|------|-------|
+| `fast` | `openrouter/google/gemini-2.5-flash` |
+| `standard` | `openrouter/google/gemini-2.5-pro` |
+| `heavy` | `openrouter/anthropic/claude-sonnet-4-6` |
