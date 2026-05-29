@@ -40,9 +40,12 @@ non-zero, dispatch.sh retries once with the fallback before returning failure to
 |------|-------|----------|-----------|----------|
 | `fast` | `openrouter/deepseek/deepseek-v4-flash` | `openrouter/google/gemini-3-flash-preview` | no | Simple bug fix, isolated change, clear root cause, no API surface changes |
 | `standard` | `openrouter/google/gemini-3.5-flash` | `openrouter/deepseek/deepseek-v4-flash` | no | Multi-file feature, new patterns, moderate complexity |
-| `heavy` | `openrouter/anthropic/claude-opus-4-7` | `openrouter/openai/gpt-5.5` | no | Complex architecture, new subsystems, large context, significant reasoning |
+| `heavy` | `openrouter/anthropic/claude-opus-4.8` | `openrouter/openai/gpt-5.5` | no | Complex architecture, new subsystems, large context, significant reasoning |
 
-**SWE-bench Verified scores (May 2026):** fast primary 79%, standard primary 81%, heavy primary 87.6%
+**SWE-bench Verified scores (May 2026):** fast primary 79%, standard primary 81%, heavy primary 88.6%
+
+**Slug format note:** Anthropic model slugs on OpenRouter use dots for version numbers
+(`claude-opus-4.8`, `claude-sonnet-4.6`). Hyphens cause "model not found" errors.
 
 Mark `confirmed` after testing each tier end-to-end in a real session.
 
@@ -68,4 +71,4 @@ Retained for reference and rollback. Tag `pre-fallback-models` points to the las
 |------|-------|
 | `fast` | `openrouter/google/gemini-2.5-flash` |
 | `standard` | `openrouter/google/gemini-2.5-pro` |
-| `heavy` | `openrouter/anthropic/claude-sonnet-4-6` |
+| `heavy` | `openrouter/anthropic/claude-sonnet-4.6` |
