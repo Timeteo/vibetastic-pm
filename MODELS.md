@@ -15,13 +15,15 @@ anywhere else in the framework.**
 
 ## Agent Roles
 
-These models are fixed per role and are not subject to tier selection.
+These agents are spawned via Claude Code's `Agent` tool, which accepts shorthand aliases
+only (`opus`, `sonnet`, `haiku`) — not pinned version slugs. `opus` resolves dynamically
+to Anthropic's current Opus release (Opus 4.8 as of May 2026).
 
-| Role | Model | Confirmed | Notes |
-|------|-------|-----------|-------|
-| Designer | `openrouter/anthropic/claude-opus-4-7` | yes | Creative and structural reasoning at planning stage |
-| Architect | `openrouter/anthropic/claude-opus-4-7` | yes | Architecture decisions require peak complex reasoning |
-| Tech Lead | `openrouter/anthropic/claude-sonnet-4-6` | yes | Code reading and spec writing |
+| Role | Model | Notes |
+|------|-------|-------|
+| Designer | `opus` | Resolves to current Opus — creative and structural reasoning at planning stage |
+| Architect | `opus` | Resolves to current Opus — architecture decisions require peak complex reasoning |
+| Tech Lead | `sonnet` | Pinned to Sonnet tier — token-heavy agent; Opus cost not justified for spec writing |
 
 ---
 
