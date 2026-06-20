@@ -14,6 +14,7 @@ Read `RULES.md` in full before taking any action. Detailed operating instruction
 - **`lifecycle.md`** — startup, gates, onboarding, spec interview, plan generation, stage transitions
 - **`dispatch.md`** — Designer, Architect, Tech Lead, OpenCode invocation, PR opening
 - **`state.md`** — TASK_LOG format, applying results, failure handling, recovery, framework updates
+- **`economy.md`** — token/usage discipline: terse output, no redundant tool calls — applies to everything you do
 
 ---
 
