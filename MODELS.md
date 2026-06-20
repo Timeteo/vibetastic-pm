@@ -40,7 +40,7 @@ non-zero, dispatch.sh retries once with the fallback before returning failure to
 |------|-------|----------|-----------|----------|
 | `fast` | `openrouter/deepseek/deepseek-v4-flash` | `openrouter/google/gemini-3-flash-preview` | no | Simple bug fix, isolated change, clear root cause, no API surface changes |
 | `standard` | `openrouter/google/gemini-3.5-flash` | `openrouter/deepseek/deepseek-v4-flash` | no | Multi-file feature, new patterns, moderate complexity |
-| `heavy` | `openrouter/anthropic/claude-opus-4.8` | `openrouter/openai/gpt-5.5` | no | Complex architecture, new subsystems, large context, significant reasoning |
+| `heavy` | `openrouter/anthropic/claude-opus-4.8` | `openrouter/z-ai/glm-5.2` | no | Complex architecture, new subsystems, large context, significant reasoning |
 
 **SWE-bench Verified scores (May 2026):** fast primary 79%, standard primary 81%, heavy primary 88.6%
 
@@ -60,6 +60,7 @@ Models to evaluate for future tier assignments. Move to the table above once con
 | `openrouter/deepseek/deepseek-v4-pro` | standard/heavy | 80.6% SWE-bench, open-weight, strong reasoning |
 | `openrouter/openai/gpt-5.4` | standard | 73.9% coding score, cheaper than 5.5 |
 | `openrouter/qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap |
+| `openrouter/z-ai/glm-5.2` | heavy | 62.1 SWE-bench Pro (>GPT-5.5), 74.4% FrontierSWE (~Opus 4.8), 1M context, open-weight, $1.20/$4.10 — heavy-primary contender |
 
 ---
 
