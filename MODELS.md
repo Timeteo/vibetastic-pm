@@ -23,7 +23,7 @@ to Anthropic's current Opus release (Opus 4.8 as of May 2026).
 |------|-------|-------|
 | Designer | `opus` | Resolves to current Opus — creative and structural reasoning at planning stage |
 | Architect | `opus` | Resolves to current Opus — architecture decisions require peak complex reasoning |
-| Tech Lead | `sonnet` | Pinned to Sonnet tier — token-heavy agent; Opus cost not justified for spec writing |
+| Tech Lead | `opus` | Resolves to current Opus — strong spec reasoning. (Effort is not settable on Agent-tool agents; see OpenCode Tiers for the only native effort knob.) |
 
 ---
 
@@ -33,14 +33,32 @@ The Tech Lead recommends a tier (`fast` / `standard` / `heavy`) in its output me
 The PM maps that tier to the model below. For Stage 2 Architect-selected tasks, the
 Architect classifies the task and picks a tier directly.
 
-The PM passes both `model` and `fallback_model` to dispatch.sh. If the primary exits
-non-zero, dispatch.sh retries once with the fallback before returning failure to the PM.
+The PM passes `model`, `fallback_model`, and `effort` to dispatch.sh. If the primary exits
+non-zero, dispatch.sh retries once with the fallback (at the same effort) before returning
+failure to the PM.
 
-| Tier | Model | Fallback | Confirmed | Use When |
-|------|-------|----------|-----------|----------|
-| `fast` | `openrouter/deepseek/deepseek-v4-flash` | `openrouter/google/gemini-3-flash-preview` | no | Simple bug fix, isolated change, clear root cause, no API surface changes |
-| `standard` | `openrouter/google/gemini-3.5-flash` | `openrouter/deepseek/deepseek-v4-flash` | no | Multi-file feature, new patterns, moderate complexity |
-| `heavy` | `openrouter/anthropic/claude-opus-4.8` | `openrouter/z-ai/glm-5.2` | no | Complex architecture, new subsystems, large context, significant reasoning |
+| Tier | Model | Fallback | Effort | Confirmed | Use When |
+|------|-------|----------|--------|-----------|----------|
+| `fast` | `openrouter/deepseek/deepseek-v4-flash` | `openrouter/google/gemini-3-flash-preview` | `minimal` | no | Simple bug fix, isolated change, clear root cause, no API surface changes |
+| `standard` | `openrouter/google/gemini-3.5-flash` | `openrouter/deepseek/deepseek-v4-flash` | `low` | no | Multi-file feature, new patterns, moderate complexity |
+| `heavy` | `openrouter/anthropic/claude-opus-4.8` | `openrouter/z-ai/glm-5.2` | `high` | no | Complex architecture, new subsystems, large context, significant reasoning |
+
+**Effort column:** maps directly to `opencode run --variant <effort>` (provider-specific
+reasoning effort). Allowed values: `minimal`, `low`, `medium`, `high`, `max`. The same effort
+applies to the primary and the fallback. Leave blank to omit `--variant` and let the model
+default. Note: effort is a knob for OpenCode-dispatched tasks only — Agent-tool roles
+(Designer, Architect, Tech Lead) have no per-spawn reasoning parameter.
+
+**⚠ No validation safety net:** opencode does not validate `--variant` against the model
+registry (the `variants` field is null for all models) and the provider (OpenRouter)
+**silently ignores** an unrecognized effort string — the run still exits 0 but at the
+model's default effort. A typo in this column fails silently. Keep values within the allowed
+set above.
+
+**Per-provider validation (2026-06-21):** all current tier+fallback model/effort pairs were
+smoke-tested live and accepted (exit 0): `deepseek-v4-flash`@`minimal`/`low`,
+`gemini-3.5-flash`@`low`, `gemini-3-flash-preview`@`minimal`, `claude-opus-4.8`@`high`,
+`glm-5.2`@`high`.
 
 **SWE-bench Verified scores (May 2026):** fast primary 79%, standard primary 81%, heavy primary 88.6%
 

@@ -1,0 +1,5 @@
+
+# opencode dispatch per-run logs
+logs/
+
+.DS_Store
