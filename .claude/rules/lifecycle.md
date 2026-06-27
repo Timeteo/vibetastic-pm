@@ -87,7 +87,7 @@ Only after SPEC `status: approved`.
    - **Stage 2 — Architecture**: one Architect task → `prompts/build-spec.md`
    - **Stage 3 — Implementation**: one or more OpenCode tasks, each a single coherent invocation
 3. Declare explicit `depends_on` for every task. Check for cycles before writing.
-4. For each OpenCode task, read the `model`, `fallback`, and `effort` columns from `framework/MODELS.md` for the assigned tier and write them to the task as `model`, `fallback_model`, and `effort`.
+4. For each OpenCode task, read the `model` and `fallback` columns from `framework/MODELS.md` for the assigned tier and write both to the task as `model` and `fallback_model`.
 5. Write `PLAN.md` with all tasks at `status: pending`, `failure_count: 0`.
 5. Append `plan_generated` to TASK_LOG.
 6. Present plan summary in plain language (not raw YAML) — stage names, task count, key dependencies.

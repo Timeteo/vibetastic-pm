@@ -1,6 +1,6 @@
 #!/bin/bash
 # PM dispatch wrapper — called by PM orchestrator to avoid shell substitution in Claude Code permission checks.
-# Usage: bash dispatch.sh <model> <project-dir> <prompt-file> [fallback-model] [effort]
+# Usage: bash dispatch.sh <model> <project-dir> <prompt-file> [fallback-model]
 #
 # Output capture: opencode's assistant output stays on stdout. Full opencode logs
 # (--print-logs --log-level INFO) are written to a per-run logfile under logs/. On a
@@ -12,7 +12,6 @@ MODEL="$1"
 DIR="$2"
 PROMPT_FILE="$3"
 FALLBACK_MODEL="${4:-}"
-EFFORT="${5:-}"
 
 LOG_DIR="${OPENCODE_DISPATCH_LOG_DIR:-logs}"
 mkdir -p "$LOG_DIR"
@@ -20,12 +19,9 @@ LOG_FILE="${LOG_DIR}/$(basename "${PROMPT_FILE%.md}")-$(date +%Y%m%d-%H%M%S).log
 
 run_opencode() {
   local model="$1"
-  local variant_args=()
-  [ -n "$EFFORT" ] && variant_args=(--variant "$EFFORT")
   # Assistant output -> stdout (caller). opencode logs -> logfile only (stderr appended).
   opencode run \
     --model "$model" \
-    "${variant_args[@]}" \
     --print-logs --log-level INFO \
     --dir "$DIR" \
     --dangerously-skip-permissions \
