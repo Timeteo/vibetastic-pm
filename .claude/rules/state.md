@@ -32,10 +32,17 @@ Never batch multiple task updates into one write. Each task result gets its own 
 
 ## Failure Handling
 
-On any task failure (agent error, malformed output, OpenCode non-zero exit):
+First distinguish **tier escalation** from a true failure. dispatch.sh **exit 20** means the
+code runs but the verifier never passed within its attempt budget — this is *not* a failure:
+follow Tier Escalation in `dispatch.md` (bump tier, log `tier_escalated`, re-dispatch, do **not**
+touch `failure_count`). Only when a task is already at the `heavy` tier and still exits 20, or
+opencode returns any other non-zero exit (infra/model failure), is it a true failure.
+
+On a true task failure (agent error, malformed output, opencode infra failure, or heavy-tier
+verifier exhaustion):
 
 1. Increment `failure_count` on the task in PLAN.md
-2. Write error message to `error` field
+2. Write error message (or verifier tail) to the `error` field
 3. Append `task_failed` to TASK_LOG
 
 Then:
@@ -45,6 +52,13 @@ Then:
   - *retry*: reset `failure_count` to 0, re-dispatch
   - *skip*: mark task `done` with note, continue (only if downstream tasks can proceed)
   - *abort*: halt all work, leave state as-is for manual inspection
+
+Because dispatch.sh now self-corrects against the verifier and the PM escalates tiers
+automatically, Gate 2 should fire rarely — only when even the `heavy` tier can't make the
+verifier pass, or on repeated infra failures.
+
+**Escalation log event** — `tier_escalated`, fields: `from_tier`, `to_tier`, `verifier_tail`,
+`new_model`, `new_fallback_model`.
 
 ---
 

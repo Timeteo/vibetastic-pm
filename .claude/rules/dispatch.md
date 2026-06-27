@@ -119,23 +119,37 @@ mode == "preamble" || mode == "notes" || mode == "task" { print }
 ' prompts/build-spec.md > "${TASK_PROMPT}"
 ```
 
-Look up `tasks[n].model` and `tasks[n].fallback_model` in PLAN.md (fallback_model is written from the `fallback` column in `framework/MODELS.md` at plan generation time).
+Look up `tasks[n].model` and `tasks[n].fallback_model` in PLAN.md, resolved from the task's
+current `tier` (see Tier Escalation below). Read the `Verify command` from `PROJECT.md` — the
+sim-independent command that proves a task didn't break the project (e.g. the Hometastic
+generic/iOS build). If `PROJECT.md` has no `Verify command`, pass an empty verifier and the
+loop degrades to the legacy single-run behavior.
 
 Dispatch:
 
 ```bash
-bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" "<tasks[n].fallback_model>" 2>&1
+bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" "<tasks[n].fallback_model>" "<verify-cmd>" 3 2>&1
 ```
 
-If `fallback_model` is empty, omit the 4th argument. dispatch.sh will try the primary only.
+- 4th arg `fallback_model`: if empty, pass `""` so the verifier stays positionally correct.
+- 5th arg `verify-cmd`: the single-line verify command from `PROJECT.md`. dispatch.sh runs it
+  in the target dir after opencode writes files and, on failure, feeds the verifier output back
+  into the same opencode session and retries — entirely in bash, costing no PM tokens.
+- 6th arg: max verify attempts (default 3).
 
-Capture exit code and full stdout/stderr. dispatch.sh writes the complete opencode log
-(`--print-logs --log-level INFO`) to a per-run file under `logs/` and prints its path to
-stderr. On a non-zero exit it echoes the last 40 log lines to stderr, so a failed run is
-never silent — read that tail (and the full logfile if needed) before deciding failure
-handling. On success the captured stream stays clean (assistant output only).
+Capture exit code and full stdout/stderr. dispatch.sh writes the complete opencode + verifier
+log to a per-run file under `logs/` and prints its path to stderr; on any non-zero exit it
+echoes the last 40 lines so a failure is never silent.
 
-**Exit 0 — run staged-change check before opening PR:**
+**Branch on dispatch.sh exit code:**
+
+| Exit | Meaning | PM action |
+|------|---------|-----------|
+| `0` | Ran and (if a verifier was set) it passed | Proceed to the staged-change check, then PR Opening |
+| `20` | Code runs but the verifier never passed within the attempt budget | **Tier escalation** (below) — not a `failure_count` event |
+| other non-0 | opencode infra/model failure (even via fallback) | Task failure — see `state.md` (`failure_count +1`) |
+
+**Exit 0 — staged-change check before opening PR:**
 
 ```bash
 git -C ../<project-name>/ diff --cached --quiet
@@ -146,7 +160,28 @@ git -C ../<project-name>/ status --short
 - Clean working tree with commits → proceed to PR Opening
 - Nothing committed at all (no new commits vs. branch base) → treat as task failure, do not open PR
 
-**Exit non-0:** handle as task failure (see `state.md`).
+---
+
+## Tier Escalation
+
+The cost lever: start a task at the cheapest reasonable tier and climb only when the verifier
+proves the model couldn't do the job. This finds the lowest tier capable of completing each
+task without you in the loop.
+
+**Ladder (from `framework/MODELS.md`):** `fast` → `standard` → `heavy`.
+
+- A task's **starting tier** is the Tech Lead / Architect `suggested_tier`. To bias harder for
+  cost savings, lower starting tiers toward `fast`; escalation is the safety net either way.
+- On dispatch.sh **exit 20** (verifier exhausted):
+  1. If the task's current `tier` is below `heavy`: bump `tier` to the next rung, re-resolve
+     `model` + `fallback_model` from `framework/MODELS.md`, append `tier_escalated` to TASK_LOG
+     (record from→to tier and the verifier tail), and **re-dispatch**. Do **not** increment
+     `failure_count` — escalation is expected, not a failure.
+  2. If the task is already at `heavy`: this is a real failure. Increment `failure_count`, write
+     the verifier output to `error`, and follow `state.md` Failure Handling (which leads to
+     Gate 2 only after the heavy tier also can't pass verification).
+- Cap escalations at one pass up the ladder per task (fast→standard→heavy). Re-dispatch at the
+  same tier is not retried automatically except via the normal `failure_count` path.
 
 ---
 

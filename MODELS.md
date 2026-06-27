@@ -36,6 +36,11 @@ Architect classifies the task and picks a tier directly.
 The PM passes `model` and `fallback_model` to dispatch.sh. If the primary exits non-zero,
 dispatch.sh retries once with the fallback before returning failure to the PM.
 
+**Escalation ladder:** the tiers below are ordered `fast` → `standard` → `heavy`. A task
+starts at its assigned tier; when dispatch.sh's verifier loop is exhausted (exit 20) the PM
+bumps to the next tier up and re-resolves `model`/`fallback` from this table. See Tier
+Escalation in `.claude/rules/dispatch.md`.
+
 | Tier | Model | Fallback | Confirmed | Use When |
 |------|-------|----------|-----------|----------|
 | `fast` | `openrouter/google/gemini-3-flash-preview` | `openrouter/anthropic/claude-sonnet-4.6` | no | Simple bug fix, isolated change, clear root cause, no API surface changes |
