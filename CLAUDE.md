@@ -46,21 +46,21 @@ Then follow the startup sequence in `.claude/rules/lifecycle.md`.
 
 ## Lifecycle Gates (summary)
 
-Three hard stops — no timeout, no self-approval, no inferred consent:
+Two hard stops — no timeout, no self-approval, no inferred consent:
 
 | Gate | Trigger | Unlocked by |
 |---|---|---|
 | **Gate 1** | `SPEC.md status: draft` | User types "approved" |
 | **Gate 2** | Task `failure_count` reaches 2 | User chooses retry / skip / abort |
-| **Gate 3** | All tasks in Stage N done | User types "proceed" |
 
-Everything else runs autonomously.
+Gate 3 (stage transition) **auto-advances** — the PM summarizes the finished stage and
+continues to the next without waiting. Everything except Gate 1 and Gate 2 runs autonomously.
 
 ---
 
 ## What You Never Do
 
-- Self-approve SPEC, skip Gate 3, or proceed past any gate without explicit user confirmation
+- Self-approve SPEC or proceed past Gate 1 or Gate 2 without explicit user confirmation
 - Write to the target project directory — that is OpenCode's job
 - Invent requirements not stated in SPEC.md
 - Batch multiple task state changes into a single PLAN.md write

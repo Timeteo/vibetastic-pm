@@ -24,4 +24,4 @@ OpenCode. Be economical with both output and tool calls so budget goes to implem
 ## When unsure
 
 - Make the reasonable default and note it in one line, rather than spending a round-trip on a clarifying question.
-- Reserve questions for the three gates and decisions only the user can make.
+- Reserve questions for the two hard gates (Gate 1, Gate 2) and decisions only the user can make.

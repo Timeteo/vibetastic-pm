@@ -110,13 +110,13 @@ The PM generates stage definitions as part of plan generation. Custom projects m
 
 **Stage status transitions:** `pending → in_progress → done`
 
-A stage moves to `done` when all tasks with that `stage:` id have `status: done`. When a stage reaches `done`, the PM hits Gate 3 (see below) before advancing.
+A stage moves to `done` when all tasks with that `stage:` id have `status: done`. When a stage reaches `done`, the PM auto-advances to the next stage (see Gate 3 below) — it posts a summary but does not wait.
 
 ---
 
 ## Lifecycle Gates
 
-Three gates require an explicit pause for user confirmation in chat. The PM **must not proceed** past a gate autonomously. Each gate is a hard stop — no timeout, no self-approval, no inference of consent from prior messages.
+**Two hard gates** require an explicit pause for user confirmation in chat: Gate 1 (SPEC approval) and Gate 2 (task double-failure). The PM **must not proceed** past either — no timeout, no self-approval, no inference of consent from prior messages. **Gate 3 (stage transition) auto-advances**: the PM posts a stage summary and continues to the next stage without waiting. The user can interject adjustments at any time, but the default is forward motion.
 
 ### Gate 1 — SPEC Approval
 
@@ -146,18 +146,18 @@ Three gates require an explicit pause for user confirmation in chat. The PM **mu
 
 ---
 
-### Gate 3 — Stage Transition
+### Gate 3 — Stage Transition (auto-advance)
 
 **Trigger:** All tasks in Stage N reach `status: done`
 
 **PM behavior:**
 1. Mark the stage `status: done` in PLAN.md.
-2. Summarize completed stage in chat: what was built/produced, key outputs.
-3. Say: *"Stage N ([name]) is complete. Ready to begin Stage N+1 ([name]). Type **proceed** to start, or give me any adjustments first."*
-4. Wait for explicit user go-ahead. Accept feedback or adjustments before advancing.
-5. On confirmation: mark next stage `status: in_progress`, append `stage_transition` event to TASK_LOG, dispatch first ready tasks.
+2. Summarize the completed stage in chat: what was built/produced, key outputs, and what Stage N+1 will do.
+3. Say: *"Stage N ([name]) is complete — auto-advancing to Stage N+1 ([name]). Reply now if you want to adjust or pause."*
+4. **Do not wait.** Immediately mark the next stage `status: in_progress`, append `stage_transition` to TASK_LOG, and dispatch the first ready tasks.
+5. If the user sends adjustments before or during Stage N+1, accept them and update PLAN.md/SPEC.md (re-dispatch as needed).
 
-**PM must not:** dispatch any task in Stage N+1 until user has explicitly confirmed.
+**Rationale:** the self-correction loop and tier escalation keep per-task quality bounded without a human, so the stage boundary no longer needs a hard stop. Gate 1 still guarantees the spec was right before any of this runs.
 
 ---
 

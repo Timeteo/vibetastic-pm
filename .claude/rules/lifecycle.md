@@ -18,7 +18,7 @@ Branch on state:
 | SPEC `status: approved`, PLAN empty | Generate PLAN |
 | PLAN has tasks `in_progress` | Mark them `failed` (`failure_count +1`), log `task_interrupted`, re-evaluate |
 | PLAN has ready tasks, current stage `in_progress` | Resume dispatch loop |
-| Awaiting Gate 3 (stage done, next stage `pending`) | Re-present Gate 3 prompt, wait for user |
+| Stage done, next stage `pending` (interrupted mid-transition) | Auto-advance: summarize, set next stage `in_progress`, dispatch (Gate 3 no longer waits) |
 
 ---
 
@@ -107,27 +107,28 @@ Only after SPEC `status: approved`.
 5. Write `PLAN.md` with all tasks at `status: pending`, `failure_count: 0`.
 5. Append `plan_generated` to TASK_LOG.
 6. Present plan summary in plain language (not raw YAML) — stage names, task count, key dependencies.
-7. **Gate 3 (Stage 1)**: *"Plan is ready. Stage 1 — Design is first. Type **proceed** to begin."*
+7. Begin Stage 1 — Design immediately (no gate): set `stages[1].status: in_progress`, append `stage_transition`, dispatch. Tell the user: *"Plan is ready — starting Stage 1 (Design). Reply if you want to adjust."*
 
 ---
 
 ## Lifecycle Gates
 
-Three hard stops. Do not infer consent, do not proceed on timeout, do not self-approve.
+Two hard stops (Gate 1, Gate 2). Do not infer consent, do not proceed on timeout, do not
+self-approve. Gate 3 auto-advances and does not block.
 
 | Gate | Trigger | What you say | What unlocks it |
 |---|---|---|---|
 | **Gate 1** | `SPEC.md status: draft` | Present spec, ask for "approved" or feedback | User types "approved" |
 | **Gate 2** | Task `failure_count` reaches 2 | Show both errors, ask retry/skip/abort | User chooses an action |
-| **Gate 3** | All tasks in Stage N are `done` | Summarize stage, ask for "proceed" | User types "proceed" |
+| **Gate 3** | All tasks in Stage N are `done` | Summarize stage, say it's auto-advancing | Nothing — proceeds immediately |
 
-### Gate 3 Detail — Stage Transition
+### Gate 3 Detail — Stage Transition (auto-advance)
 
 When all tasks in Stage N reach `status: done`:
 
 1. Set `stages[N].status: done` in PLAN.md.
 2. Append `stage_complete` to TASK_LOG.
 3. Present to user: what was accomplished, key output file paths, what Stage N+1 will do.
-4. Say: *"Type **proceed** to begin Stage [N+1 name], or give me adjustments."*
-5. Wait. Accept adjustments (update PLAN.md or SPEC.md as needed) or proceed.
-6. On "proceed": set `stages[N+1].status: in_progress`, append `stage_transition`, enter dispatch loop.
+4. Say: *"Stage [N name] complete — auto-advancing to Stage [N+1 name]. Reply now to adjust or pause."*
+5. **Do not wait.** Set `stages[N+1].status: in_progress`, append `stage_transition`, enter the dispatch loop.
+6. If the user sends adjustments (before or during Stage N+1), apply them to PLAN.md/SPEC.md and re-dispatch as needed.
