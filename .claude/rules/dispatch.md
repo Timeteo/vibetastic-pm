@@ -171,6 +171,12 @@ The cost lever: start a task at the cheapest reasonable tier and climb only when
 proves the model couldn't do the job. This finds the lowest tier capable of completing each
 task without you in the loop.
 
+**The whole ladder is non-Anthropic (cheap API).** All three tiers are non-Anthropic models
+(see `framework/MODELS.md` → the Anthropic-on-subscription-only invariant). Escalating a tier
+never means "spend API Opus" — it means trying a different cheap model family. The Anthropic
+"big gun" is only ever reached by **leaving the API lane** for the subscription side (Gate 2,
+below).
+
 **Ladder (from `framework/MODELS.md`):** `fast` → `standard` → `heavy`.
 
 - A task's **starting tier** is the Tech Lead / Architect `suggested_tier`. To bias harder for
@@ -180,9 +186,13 @@ task without you in the loop.
      `model` + `fallback_model` from `framework/MODELS.md`, append `tier_escalated` to TASK_LOG
      (record from→to tier and the verifier tail), and **re-dispatch**. Do **not** increment
      `failure_count` — escalation is expected, not a failure.
-  2. If the task is already at `heavy`: this is a real failure. Increment `failure_count`, write
-     the verifier output to `error`, and follow `state.md` Failure Handling (which leads to
-     Gate 2 only after the heavy tier also can't pass verification).
+  2. If the task is already at `heavy`: the non-Anthropic ladder is exhausted — **control now
+     returns to the subscription side**, never to API Opus. Increment `failure_count`, write the
+     verifier output to `error`, and follow `state.md` Failure Handling → Gate 2: the Tech Lead
+     (subscription Sonnet, escalating to subscription Opus for genuinely architectural cases)
+     re-specs or fixes the task on the Agent tool, then it re-enters the ladder at `fast`. This
+     is the "offload cheap; when it can't, the subscription handles it" boundary — the Anthropic
+     work is covered by the plan, not billed per-token through OpenRouter.
 - Cap escalations at one pass up the ladder per task (fast→standard→heavy). Re-dispatch at the
   same tier is not retried automatically except via the normal `failure_count` path.
 

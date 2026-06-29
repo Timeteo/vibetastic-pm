@@ -53,20 +53,43 @@ Architect classifies the task and picks a tier directly.
 The PM passes `model` and `fallback_model` to dispatch.sh. If the primary exits non-zero,
 dispatch.sh retries once with the fallback before returning failure to the PM.
 
+**Hard invariant — Anthropic runs on the subscription only.** opencode is a separate process
+and cannot use Claude subscription; it can only authenticate to OpenRouter (paid API).
+So **no `openrouter/anthropic/*` model may ever appear in these tiers or their fallbacks** —
+routing Anthropic through the API bills it at full rate, the exact opposite of "offload cheap
+work." The opencode tiers are **non-Anthropic only**. The Anthropic "big gun" lives exclusively
+on the subscription side (the Architect / Tech Lead / PM via the Claude Code Agent tool). When
+the non-Anthropic ladder is exhausted, control returns there (Gate 2 re-spec on subscription
+Opus) — it never falls through to API Opus.
+
 **Escalation ladder:** the tiers below are ordered `fast` → `standard` → `heavy`. A task
 starts at its assigned tier; when dispatch.sh's verifier loop is exhausted (exit 20) the PM
-bumps to the next tier up and re-resolves `model`/`fallback` from this table. See Tier
-Escalation in `.claude/rules/dispatch.md`.
+bumps to the next tier up and re-resolves `model`/`fallback` from this table. Each rung is a
+**different model family** so an escalation is a genuinely fresh attempt, not the same model
+retried. Above `heavy`, escalation leaves the API lane entirely → subscription (see Tier
+Escalation in `.claude/rules/dispatch.md`).
 
 | Tier | Model | Fallback | Confirmed | Use When |
 |------|-------|----------|-----------|----------|
-| `fast` | `openrouter/google/gemini-3-flash-preview` | `openrouter/anthropic/claude-sonnet-4.6` | no | Simple bug fix, isolated change, clear root cause, no API surface changes |
-| `standard` | `openrouter/google/gemini-3.5-flash` | `openrouter/google/gemini-3-flash-preview` | no | Multi-file feature, new patterns, moderate complexity |
-| `heavy` | `openrouter/anthropic/claude-opus-4.8` | `openrouter/z-ai/glm-5.2` | no | Complex architecture, new subsystems, large context, significant reasoning |
+| `fast` | `openrouter/google/gemini-3-flash-preview` | `openrouter/deepseek/deepseek-v4-pro` | yes (e2e 2026-06-29) | Simple bug fix, isolated change, clear root cause, no API surface changes |
+| `standard` | `openrouter/deepseek/deepseek-v4-pro` | `openrouter/z-ai/glm-5.2` | yes (e2e 2026-06-29) | Multi-file feature, new patterns, moderate complexity |
+| `heavy` | `openrouter/z-ai/glm-5.2` | `openrouter/deepseek/deepseek-v4-pro` | yes (e2e 2026-06-29) | Complex architecture, new subsystems, large context, significant reasoning |
 
-`deepseek-v4-flash` was removed from both tiers (it failed on every run). The reasoning-effort
-(`--variant`) knob was also removed: it broke the gemini tiers in real tasks and opencode
-provides no per-model validation for it.
+All three primaries have **1M context** (not "low-context flash" — verified on OpenRouter
+2026-06-29) and were tested end-to-end through opencode (`opencode run` completed a multi-file
+task, exit 0). `deepseek-v4-pro` is both the cheapest and strongest SWE-bench model here, so it
+anchors `standard`; `glm-5.2` (different family, ~Opus-4.8 FrontierSWE) is the `heavy` last
+non-Anthropic attempt before bouncing to subscription.
+
+`deepseek-v4-flash` was removed earlier (it failed on every run). **`gemini-3.5-flash` was
+removed as a primary (2026-06-29):** it is a reasoning model that, on large task prompts, spends
+its whole token budget in `reasoning` and emits no content/tool-call — the root cause of the
+hour-long opencode stall in `hometastic-pm/logs/task-T052-20260628-094058.log` (verify-exhaust →
+needless escalation to the old API-Opus heavy tier). `reasoning:{effort:low}` fixes it via the
+raw OpenRouter API but did not take through opencode's `provider.models[*].options` passthrough,
+so the reasoning models are simply not used as primaries. The reasoning-effort (`--variant`)
+knob was also removed earlier: it broke the gemini tiers and opencode provides no per-model
+validation for it.
 
 **Slug format note:** Anthropic model slugs on OpenRouter use dots for version numbers
 (`claude-opus-4.8`, `claude-sonnet-4.6`). Hyphens cause "model not found" errors.
@@ -81,19 +104,25 @@ Used by `cost-report.sh` to turn telemetry token counts into dollar estimates, a
 PM/you when reasoning about tier choices. **Verify against current pricing before trusting
 the dollar figures** — model prices change. Claude prices confirmed 2026-06-29.
 
-| Model slug | $ in | $ out | Notes |
-|------------|------|-------|-------|
-| `opus` / `claude-opus-4.8` / `openrouter/anthropic/claude-opus-4.8` | 5.00 | 25.00 | Planning agents + heavy tier |
-| `fable` / `claude-fable-5` | 10.00 | 50.00 | Not used by a role today |
-| `sonnet` / `claude-sonnet-4.6` / `openrouter/anthropic/claude-sonnet-4.6` | 3.00 | 15.00 | Recommended PM + Tech Lead default |
-| `haiku` / `claude-haiku-4-5` | 1.00 | 5.00 | Commit subagent / mechanical steps |
-| `openrouter/z-ai/glm-5.2` | 1.20 | 4.10 | Heavy-tier fallback contender |
-| `openrouter/google/gemini-3-flash-preview` | ? | ? | fast tier — verify on OpenRouter |
-| `openrouter/google/gemini-3.5-flash` | ? | ? | standard tier — verify on OpenRouter |
+**Anthropic rows are subscription-side** (Agent tool) — the $ figures are list API rates shown
+for relative reasoning only; under Anthropic plan that work is covered by the subscription, not
+billed per-token. The `openrouter/...` rows are the **only** real per-token spend (the cheap
+offload lane). Context/prices verified on OpenRouter 2026-06-29.
+
+| Model slug | $ in | $ out | Ctx | Notes |
+|------------|------|-------|-----|-------|
+| `opus` / `claude-opus-4.8` | 5.00 | 25.00 | 1M | Subscription only (Architect; Gate-2 re-spec). **Never via API/opencode.** |
+| `fable` / `claude-fable-5` | 10.00 | 50.00 | — | Not used by a role today |
+| `sonnet` / `claude-sonnet-4.6` | 3.00 | 15.00 | 1M | Subscription only (PM + Tech Lead default) |
+| `haiku` / `claude-haiku-4-5` | 1.00 | 5.00 | 200K | Subscription only (commit subagent / mechanical steps) |
+| `openrouter/deepseek/deepseek-v4-pro` | 0.43 | 0.87 | 1M | **standard** primary; fast/heavy fallback — cheapest, top SWE-bench |
+| `openrouter/z-ai/glm-5.2` | 0.95 | 3.00 | 1M | **heavy** primary; standard fallback (~Opus-4.8 FrontierSWE) |
+| `openrouter/google/gemini-3-flash-preview` | 0.50 | 3.00 | 1M | **fast** primary — clean tool_calls, fastest |
+| `openrouter/google/gemini-3.5-flash` | 1.50 | 9.00 | 1M | Dropped (reasoning-stall on big tasks); kept for reference |
 
 Aliases (`opus`/`sonnet`/`haiku`/`fable`) are what the Claude Code Agent tool accepts for the
-planning roles; the `openrouter/...` slugs are what dispatch.sh records for OpenCode builds.
-Rows share a price across the aliases that resolve to the same model.
+subscription-side planning roles; the `openrouter/...` slugs are what dispatch.sh records for
+OpenCode builds. Rows share a price across the aliases that resolve to the same model.
 
 ---
 
@@ -103,10 +132,11 @@ Models to evaluate for future tier assignments. Move to the table above once con
 
 | Model | Potential tier | Notes |
 |-------|---------------|-------|
-| `openrouter/deepseek/deepseek-v4-pro` | standard/heavy | 80.6% SWE-bench, open-weight, strong reasoning |
-| `openrouter/openai/gpt-5.4` | standard | 73.9% coding score, cheaper than 5.5 |
-| `openrouter/qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap |
-| `openrouter/z-ai/glm-5.2` | heavy | 62.1 SWE-bench Pro (>GPT-5.5), 74.4% FrontierSWE (~Opus 4.8), 1M context, open-weight, $1.20/$4.10 — heavy-primary contender |
+| `openrouter/openai/gpt-5.4` | standard | 73.9% coding score, cheaper than 5.5 — non-Anthropic alt if a tier needs swapping |
+| `openrouter/qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap; 128K ctx (smaller) |
+
+(`deepseek-v4-pro` and `glm-5.2` were promoted into the active tiers on 2026-06-29 — see OpenCode
+Tiers. `glm-5.2` actual OpenRouter price is $0.95/$3.00, 1M ctx.)
 
 ---
 

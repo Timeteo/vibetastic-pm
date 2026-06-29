@@ -34,6 +34,19 @@ LOG_FILE="${LOG_DIR}/$(basename "${PROMPT_FILE%.md}")-$(date +%Y%m%d-%H%M%S).log
 # Active model — may switch to the fallback on an infra failure of the initial run.
 ACTIVE_MODEL="$MODEL"
 
+# Per-opencode-call wall-clock cap. A stalled model (e.g. a reasoning model burning its whole
+# token budget on `reasoning` with no content/tool-call) otherwise hangs this call indefinitely
+# — observed as a multi-hour no-op in logs/. On timeout, `timeout` exits 124, which flows through
+# the same path as any non-zero opencode exit (fallback once, then a non-zero return to the PM),
+# so a hang fails fast and cheap instead of stalling then needlessly escalating tiers. Override
+# with OPENCODE_DISPATCH_TIMEOUT (seconds); 0 disables. No-op if `timeout` isn't on PATH.
+DISPATCH_TIMEOUT="${OPENCODE_DISPATCH_TIMEOUT:-900}"
+if [ "$DISPATCH_TIMEOUT" != "0" ] && command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_PREFIX=(timeout "$DISPATCH_TIMEOUT")
+else
+  TIMEOUT_PREFIX=()
+fi
+
 # --- Cost telemetry ---
 # Append one structured record per dispatch to logs/cost.jsonl. Always-available signals
 # (model, tier, attempts, verify result, exit, wall-clock) plus best-effort token counts
@@ -58,7 +71,7 @@ emit_cost() {
 run_opencode_fresh() {
   local model="$1"
   # Fresh session seeded with the task prompt file.
-  opencode run \
+  "${TIMEOUT_PREFIX[@]}" opencode run \
     --model "$model" \
     --print-logs --log-level INFO \
     --dir "$DIR" \
@@ -70,7 +83,7 @@ run_opencode_fresh() {
 run_opencode_continue() {
   local model="$1" message="$2"
   # Continue the most recent session in DIR (dispatches run one at a time) with a new message.
-  opencode run \
+  "${TIMEOUT_PREFIX[@]}" opencode run \
     --continue \
     --model "$model" \
     --print-logs --log-level INFO \
