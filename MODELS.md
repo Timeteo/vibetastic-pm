@@ -13,17 +13,34 @@ anywhere else in the framework.**
 
 ---
 
+## PM Orchestrator (the session model)
+
+The PM itself is not spawned — it's the Claude Code session you launch in `<project>-pm/`.
+Run it on **Sonnet** (`claude --model sonnet`): the PM is a coordinator (read state, apply YAML,
+branch on dispatch exit codes, write PLAN), which is not peak-reasoning work, and it's the
+longest-lived/highest-token agent in the system — the single biggest cost lever. Switch to
+Opus only for the Gate-1 spec interview or diagnosing a hard repeated failure, then switch back.
+`setup.sh` prints this as the launch command.
+
 ## Agent Roles
 
 These agents are spawned via Claude Code's `Agent` tool, which accepts shorthand aliases
-only (`opus`, `sonnet`, `haiku`) — not pinned version slugs. `opus` resolves dynamically
-to Anthropic's current Opus release (Opus 4.8 as of May 2026).
+only (`opus`, `sonnet`, `haiku`, `fable`) — not pinned version slugs. `opus` resolves dynamically
+to Anthropic's current Opus release (Opus 4.8 as of 2026-06).
 
-| Role | Model | Notes |
-|------|-------|-------|
-| Designer | `opus` | Resolves to current Opus — creative and structural reasoning at planning stage |
-| Architect | `opus` | Resolves to current Opus — architecture decisions require peak complex reasoning |
-| Tech Lead | `opus` | Resolves to current Opus — strong spec reasoning |
+Balanced cost bias (2026-06-29): the reasoning roles default to **Sonnet** and only the
+Architect holds **Opus**, where peak reasoning earns its cost. Tier escalation (and re-speccing
+a heavy-tier task that still fails Gate 2 on Opus) is the safety net. Telemetry
+(`cost-report.sh`) drives further tuning — refine these once real data is collected.
+
+| Role | Model | Escalate to | Notes |
+|------|-------|-------------|-------|
+| Designer | `sonnet` | `opus` | UI/structural reasoning; Sonnet handles most. (In Hometastic, design is frozen — Designer should not run at all.) |
+| Architect | `opus` | — | Stage-2 subsystem design needs peak reasoning; invoked rarely, so low frequency = low cost |
+| Tech Lead | `sonnet` | `opus` | Most frequently spawned reasoning role; a spec is cheap to redo, so default cheap. Escalate to Opus only for architecturally heavy work |
+
+To escalate a role for one spawn (e.g. a genuinely architectural Tech Lead pass), use the
+`Escalate to` model and log it in the `cost_event` (see `.claude/rules/state.md`).
 
 ---
 

@@ -159,7 +159,7 @@ git -C ../<project-name>/ diff --cached --quiet
 git -C ../<project-name>/ status --short
 ```
 
-- Staged uncommitted changes → spawn subagent (`anthropic/claude-sonnet-4-6`) to commit with appropriate message, then proceed to PR Opening
+- Staged uncommitted changes → spawn a `haiku` subagent to commit with an appropriate message (mechanical — no reasoning needed), then proceed to PR Opening
 - Clean working tree with commits → proceed to PR Opening
 - Nothing committed at all (no new commits vs. branch base) → treat as task failure, do not open PR
 

@@ -89,4 +89,6 @@ EOF
 
 echo "✓ Wrote PROJECT.md"
 echo ""
-echo "Setup complete. Start the PM with: claude"
+echo "Setup complete. Start the PM with: claude --model sonnet"
+echo "  (The PM is a coordinator — run it on Sonnet to control cost; see MODELS.md."
+echo "   Switch to Opus only for the Gate-1 spec interview or hard failure diagnosis.)"
