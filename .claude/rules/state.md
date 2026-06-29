@@ -15,6 +15,29 @@ agent: <designer | architect | opencode | pm>
 
 Include enough detail to reconstruct what happened without reading PLAN.md. On failures, include the full error message.
 
+### Cost telemetry (`cost_event`)
+
+After every subagent spawn (Designer / Architect / Tech Lead) **and** before each
+`dispatch.sh` call, append a `cost_event` so per-role model spend is measurable. OpenCode
+dispatches are also recorded automatically by dispatch.sh into `logs/cost.jsonl`; the
+`cost_event` log is what attributes the *planning* models, which run as Claude Code Agents and
+are invisible to dispatch.sh.
+
+```markdown
+### <ISO8601> · cost_event
+```yaml
+task_id: <id or null>
+role: <designer | architect | tech_lead | opencode | pm>
+model: <model/alias actually used — e.g. sonnet, opus, openrouter/google/gemini-3.5-flash>
+tier: <fast | standard | heavy | null>   # OpenCode only
+note: <one line, optional>
+```
+```
+
+Run `bash framework/cost-report.sh` to roll up `logs/cost.jsonl` + these `cost_event` entries
+against the `MODELS.md` Pricing table — the evidence base for tuning tiers (cheapest model that
+clears the bar; escalate on proof).
+
 ---
 
 ## Applying Results

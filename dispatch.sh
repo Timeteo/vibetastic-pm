@@ -2,7 +2,7 @@
 # PM dispatch wrapper — called by PM orchestrator to avoid shell substitution in Claude Code permission checks.
 #
 # Usage:
-#   bash dispatch.sh <model> <project-dir> <prompt-file> [fallback-model] [verify-cmd] [max-attempts]
+#   bash dispatch.sh <model> <project-dir> <prompt-file> [fallback-model] [verify-cmd] [max-attempts] [tier]
 #
 # Runs opencode on the task. If <verify-cmd> is given, it then verifies the working tree
 # and self-corrects: on a failed verify it continues the SAME opencode session with the
@@ -25,6 +25,7 @@ PROMPT_FILE="$3"
 FALLBACK_MODEL="${4:-}"
 VERIFY_CMD="${5:-}"
 MAX_ATTEMPTS="${6:-3}"
+TIER="${7:-}"   # optional: task tier (fast|standard|heavy), recorded in cost telemetry only
 
 LOG_DIR="${OPENCODE_DISPATCH_LOG_DIR:-logs}"
 mkdir -p "$LOG_DIR"
@@ -32,6 +33,27 @@ LOG_FILE="${LOG_DIR}/$(basename "${PROMPT_FILE%.md}")-$(date +%Y%m%d-%H%M%S).log
 
 # Active model — may switch to the fallback on an infra failure of the initial run.
 ACTIVE_MODEL="$MODEL"
+
+# --- Cost telemetry ---
+# Append one structured record per dispatch to logs/cost.jsonl. Always-available signals
+# (model, tier, attempts, verify result, exit, wall-clock) plus best-effort token counts
+# grepped from the opencode log when present. framework/cost-report.sh rolls these up.
+# Never fatal — telemetry must not affect the dispatch exit code.
+START_EPOCH="$(date +%s)"
+ATTEMPTS_USED=1
+
+emit_cost() {
+  local code="$1" end_epoch dur in_tok out_tok verify_passed
+  end_epoch="$(date +%s)"
+  dur=$(( end_epoch - START_EPOCH ))
+  in_tok="$(grep -oiE '(input|prompt)_tokens[":= ]+[0-9]+' "$LOG_FILE" 2>/dev/null | grep -oE '[0-9]+$' | tail -1)"
+  out_tok="$(grep -oiE '(output|completion)_tokens[":= ]+[0-9]+' "$LOG_FILE" 2>/dev/null | grep -oE '[0-9]+$' | tail -1)"
+  [ "$code" -eq 0 ] && verify_passed=true || verify_passed=false
+  printf '{"ts":"%s","role":"opencode","prompt":"%s","model":"%s","tier":"%s","attempts":%s,"verify_passed":%s,"exit":%s,"duration_s":%s,"input_tokens":%s,"output_tokens":%s,"log":"%s"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(basename "$PROMPT_FILE")" "$ACTIVE_MODEL" "$TIER" \
+    "${ATTEMPTS_USED:-1}" "$verify_passed" "$code" "$dur" "${in_tok:-null}" "${out_tok:-null}" \
+    "$(basename "$LOG_FILE")" >> "${LOG_DIR}/cost.jsonl" 2>/dev/null || true
+}
 
 run_opencode_fresh() {
   local model="$1"
@@ -69,6 +91,7 @@ run_verify() {
 
 finish() {
   local code="$1"
+  emit_cost "$code"
   if [ "$code" -ne 0 ]; then
     echo "[dispatch] failed (exit $code). Last 40 log lines:" >&2
     tail -n 40 "$LOG_FILE" >&2
@@ -96,6 +119,7 @@ fi
 # --- Verify + self-correct loop ---
 attempt=1
 while true; do
+  ATTEMPTS_USED="$attempt"
   if run_verify; then
     echo "[dispatch] verify passed on attempt $attempt/$MAX_ATTEMPTS." >&2
     finish 0

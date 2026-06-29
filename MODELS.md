@@ -58,6 +58,28 @@ Mark `confirmed` after testing each tier end-to-end in a real session.
 
 ---
 
+## Pricing ($/Mtok)
+
+Used by `cost-report.sh` to turn telemetry token counts into dollar estimates, and by the
+PM/you when reasoning about tier choices. **Verify against current pricing before trusting
+the dollar figures** — model prices change. Claude prices confirmed 2026-06-29.
+
+| Model slug | $ in | $ out | Notes |
+|------------|------|-------|-------|
+| `opus` / `claude-opus-4.8` / `openrouter/anthropic/claude-opus-4.8` | 5.00 | 25.00 | Planning agents + heavy tier |
+| `fable` / `claude-fable-5` | 10.00 | 50.00 | Not used by a role today |
+| `sonnet` / `claude-sonnet-4.6` / `openrouter/anthropic/claude-sonnet-4.6` | 3.00 | 15.00 | Recommended PM + Tech Lead default |
+| `haiku` / `claude-haiku-4-5` | 1.00 | 5.00 | Commit subagent / mechanical steps |
+| `openrouter/z-ai/glm-5.2` | 1.20 | 4.10 | Heavy-tier fallback contender |
+| `openrouter/google/gemini-3-flash-preview` | ? | ? | fast tier — verify on OpenRouter |
+| `openrouter/google/gemini-3.5-flash` | ? | ? | standard tier — verify on OpenRouter |
+
+Aliases (`opus`/`sonnet`/`haiku`/`fable`) are what the Claude Code Agent tool accepts for the
+planning roles; the `openrouter/...` slugs are what dispatch.sh records for OpenCode builds.
+Rows share a price across the aliases that resolve to the same model.
+
+---
+
 ## Candidates
 
 Models to evaluate for future tier assignments. Move to the table above once confirmed.

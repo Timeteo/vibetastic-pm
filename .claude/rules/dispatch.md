@@ -128,7 +128,7 @@ loop degrades to the legacy single-run behavior.
 Dispatch:
 
 ```bash
-bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" "<tasks[n].fallback_model>" "<verify-cmd>" 3 2>&1
+bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" "<tasks[n].fallback_model>" "<verify-cmd>" 3 "<tasks[n].tier>" 2>&1
 ```
 
 - 4th arg `fallback_model`: if empty, pass `""` so the verifier stays positionally correct.
@@ -136,6 +136,9 @@ bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" 
   in the target dir after opencode writes files and, on failure, feeds the verifier output back
   into the same opencode session and retries — entirely in bash, costing no PM tokens.
 - 6th arg: max verify attempts (default 3).
+- 7th arg `tier`: the task's current tier (`fast`/`standard`/`heavy`). Recorded in
+  `logs/cost.jsonl` for cost telemetry only — it does not change dispatch behavior. Also append
+  a `cost_event` to TASK_LOG before dispatching (see `state.md` → Cost telemetry).
 
 Capture exit code and full stdout/stderr. dispatch.sh writes the complete opencode + verifier
 log to a per-run file under `logs/` and prints its path to stderr; on any non-zero exit it
