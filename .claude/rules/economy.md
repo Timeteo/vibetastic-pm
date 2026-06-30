@@ -25,3 +25,9 @@ OpenCode. Be economical with both output and tool calls so budget goes to implem
 
 - Make the reasonable default and note it in one line, rather than spending a round-trip on a clarifying question.
 - Reserve questions for the two hard gates (Gate 1, Gate 2) and decisions only the user can make.
+
+## Route work by cost (see RULES.md "Operating lessons")
+
+- **Diagnosis is cheap-tier work.** Don't burn Anthropic reading code to find a root cause — dispatch a **read-only** "investigate → report root cause + minimal fix, change nothing" task to `standard`/`heavy` (deepseek/glm). Anthropic is for peak-judgment and gates only.
+- **Never absorb the Tech Lead.** Spec-writing and diff-review go to the Tech Lead tier, not the PM/orchestrator on Opus.
+- **Visual tuning is not a dispatch task.** Trivial layout nudges: do directly or hand the on-device pass to the human; one build+test+screenshot per nudge is wasted budget.

@@ -173,6 +173,20 @@ The PM handles these autonomously without pausing for user input:
 
 ---
 
+## Operating lessons (hard-won 2026-06-29)
+
+These override convenience. Each cost real cycles when ignored.
+
+1. **Verify inputs/data before pixels or "looks done".** A component that compiles, passes mocked tests, and renders can still be fed empty or wrong data. Before judging a UI/feature, confirm it is actually *receiving the data it should* — trace the data source, not just the rendered output. Mock-backed tests that bypass the real fetch/decode/transport path are not verification; an integration test must exercise the production path with a real payload. (Cost of ignoring: an empty data binding was mistaken for layout/glass bugs across ~5 build cycles.)
+
+2. **Route open-ended diagnosis to the cheap-but-capable OpenCode tiers, not Anthropic.** Reading code to find a root cause is grunt reasoning the `standard`/`heavy` tiers (deepseek/glm) do well and cheaply. Doing it on the Anthropic subscription burns the biggest cost lever for no quality gain. Dispatch a **read-only** "investigate X → report root cause + minimal fix, change nothing" task; reserve Anthropic for genuine peak-judgment and gate decisions.
+
+3. **Keep spec-writing and code review on the Tech Lead tier (Sonnet/cheap) — never silently on Opus.** The PM/orchestrator must not absorb the Tech Lead role and run every build-prompt and diff-review itself at peak cost. Delegate spec + review to the Tech Lead; the orchestrator decides and gates, it does not personally author and review on Opus.
+
+4. **Tight visual/layout tuning does not belong in the dispatch loop.** Build + test + screenshot per nudge is far too slow for "move it up 40pt." Do trivial visual nudges directly, or hand the on-device visual pass to the human. Automated screenshots confirm an artifact's presence/absence; they are weak for landing a precise interaction frame (e.g. a mid-scroll state).
+
+---
+
 ## Agent Contracts
 
 ### Designer
