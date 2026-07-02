@@ -181,7 +181,7 @@ These override convenience. Each cost real cycles when ignored.
 
 2. **Route open-ended diagnosis to the cheap-but-capable OpenCode tiers, not Anthropic.** Reading code to find a root cause is grunt reasoning the `standard`/`heavy` tiers (deepseek/glm) do well and cheaply. Doing it on the Anthropic subscription burns the biggest cost lever for no quality gain. Dispatch a **read-only** "investigate X → report root cause + minimal fix, change nothing" task; reserve Anthropic for genuine peak-judgment and gate decisions.
 
-3. **Keep spec-writing and code review on the Tech Lead tier (Sonnet/cheap) — never silently on Opus.** The PM/orchestrator must not absorb the Tech Lead role and run every build-prompt and diff-review itself at peak cost. Delegate spec + review to the Tech Lead; the orchestrator decides and gates, it does not personally author and review on Opus.
+3. **Keep spec-writing and code review on the Tech Lead tier (Sonnet/cheap) — never silently on Opus.** The PM/orchestrator must not absorb the Tech Lead role and run every build-prompt and diff-review itself at peak cost. Delegate spec + review to the Tech Lead; the orchestrator decides and gates, it does not personally author and review on Opus. For diff review this is structural: the first pass runs as a read-only Reviewer dispatch (`dispatch.sh --read-only` + `prompts/reviewer.md`, standard tier) or a Sonnet subagent; the orchestrator only adjudicates the verdict (see `VERIFY.md` § Diff review).
 
 4. **Tight visual/layout tuning does not belong in the dispatch loop.** Build + test + screenshot per nudge is far too slow for "move it up 40pt." Do trivial visual nudges directly, or hand the on-device visual pass to the human. Automated screenshots confirm an artifact's presence/absence; they are weak for landing a precise interaction frame (e.g. a mid-scroll state).
 
@@ -206,6 +206,13 @@ These override convenience. Each cost real cycles when ignored.
 - **Returns:** Task spec section (appended to build-spec.md) + structured YAML metadata (task title, branch, issue refs, depends_on, suggested model)
 - **Does not:** Write code, execute commands in the target project, or make implementation decisions beyond speccing
 - **Model:** Sonnet by default; PM may use Opus for complex architectural tasks
+
+### Reviewer (first-pass diff review — cheap tier, read-only)
+- **Invoked with:** `bash framework/dispatch.sh --read-only <standard-tier-model> <target-project-path> <rendered-reviewer-prompt>` (template: `framework/prompts/reviewer.md`), or as a Sonnet `Agent` subagent with the same rendered prompt
+- **Receives:** task spec, `verify_tier`, diff range
+- **Returns:** VERDICT (APPROVE / APPROVE-WITH-FOLLOWUPS / REJECT) + findings; the orchestrator adjudicates against the spec and decides merge / reject / re-dispatch
+- **Does not:** modify any file (enforced — dispatch exits 21 on a dirty tree), merge, or decide
+- **Why:** the intent-review rung of the gate (`VERIFY.md`) must run on every diff; running it on Opus was the measured top cost sink, so Opus only adjudicates
 
 ### OpenCode (via PM shell invocation)
 - **Invoked with:** `bash framework/dispatch.sh <model> <target-project-path> <per-task-prompt-file>` — PM extracts a task-scoped prompt file via awk before calling dispatch (see CLAUDE.md OpenCode section)

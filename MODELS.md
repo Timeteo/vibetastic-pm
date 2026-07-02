@@ -38,6 +38,7 @@ a heavy-tier task that still fails Gate 2 on Opus) is the safety net. Telemetry
 | Designer | `sonnet` | `opus` | UI/structural reasoning; Sonnet handles most. (In Hometastic, design is frozen — Designer should not run at all.) |
 | Architect | `opus` | — | Stage-2 subsystem design needs peak reasoning; invoked rarely, so low frequency = low cost |
 | Tech Lead | `sonnet` | `opus` | Most frequently spawned reasoning role; a spec is cheap to redo, so default cheap. Escalate to Opus only for architecturally heavy work |
+| Reviewer | opencode `standard` tier (or `sonnet` subagent) | orchestrator adjudicates | First-pass diff review runs cheap and read-only (`dispatch.sh --read-only` + `prompts/reviewer.md`); Opus reads only the verdict. See VERIFY.md |
 
 To escalate a role for one spawn (e.g. a genuinely architectural Tech Lead pass), use the
 `Escalate to` model and log it in the `cost_event` (see `.claude/rules/state.md`).
