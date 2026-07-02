@@ -13,14 +13,15 @@ anywhere else in the framework.**
 
 ---
 
-## PM Orchestrator (the session model)
+## Orchestrator (the partner session — A1 model)
 
-The PM itself is not spawned — it's the Claude Code session you launch in `<project>-pm/`.
-Run it on **Sonnet** (`claude --model sonnet`): the PM is a coordinator (read state, apply YAML,
-branch on dispatch exit codes, write PLAN), which is not peak-reasoning work, and it's the
-longest-lived/highest-token agent in the system — the single biggest cost lever. Switch to
-Opus only for the Gate-1 spec interview or diagnosing a hard repeated failure, then switch back.
-`setup.sh` prints this as the launch command.
+There is no standalone PM session (retired 2026-06-29). The orchestrator is the partner
+session in the project's `<project>-run` workspace, typically on **Opus** because it also
+serves as the human's thinking partner. That is only affordable because the orchestrator
+**delegates**: spec-writing to the Tech Lead tier, first-pass diff review to the Reviewer
+(cheap, read-only), open-ended diagnosis to read-only `standard`/`heavy` dispatches. The
+measured failure mode is the partner absorbing those roles itself at Opus rates —
+RULES.md operating lessons 2–3 exist because that burned a session budget in one day.
 
 ## Agent Roles
 

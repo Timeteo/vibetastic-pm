@@ -1,5 +1,14 @@
 # Walkthrough — Instantiating vibetastic-pm for a New Project
 
+> **⚠️ Partially historical (2026-06-29 — A1 model).** This walkthrough describes the
+> original **standalone PM session** launched inside `<project>-pm/`. That session model is
+> **retired**: orchestration now runs from the project's `<project>-run` partner workspace,
+> which drives `framework/dispatch.sh` directly and enforces `framework/VERIFY.md` as the
+> merge gate — see `CLAUDE.md` (v2). The mechanics below (setup.sh, subtree layout,
+> SPEC/PLAN/TASK_LOG flow, gates, dispatch/verify loop, tier escalation) are still accurate;
+> read "the PM" as "the partner-orchestrator" and ignore instructions to launch `claude`
+> in the `-pm/` directory.
+
 ## TL;DR
 
 vibetastic-pm is a Claude Code PM orchestrator. You describe your project; it drives four agents — Designer → Architect → Tech Lead (on demand) → OpenCode — from spec through working code. Your only required inputs are:

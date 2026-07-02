@@ -1,10 +1,10 @@
 #!/bin/bash
-# vibetastic-pm project setup — run once before the first PM session.
-# Usage: bash framework/setup.sh <project-name> <absolute-path-to-code-dir>
+# vibetastic-pm project setup — run once when standing up a <project>-pm/ directory.
+# Usage: bash framework/setup.sh <project-name> <absolute-path-to-code-dir> <org/repo>
 #
 # Writes:
 #   .claude/settings.json   — allowlist for cross-directory operations
-#   PROJECT.md              — project paths for PM sessions
+#   PROJECT.md              — project paths for the partner-orchestrator
 
 set -e
 
@@ -89,6 +89,7 @@ EOF
 
 echo "✓ Wrote PROJECT.md"
 echo ""
-echo "Setup complete. Start the PM with: claude --model sonnet"
-echo "  (The PM is a coordinator — run it on Sonnet to control cost; see MODELS.md."
-echo "   Switch to Opus only for the Gate-1 spec interview or hard failure diagnosis.)"
+echo "Setup complete. This -pm directory is runtime plumbing — do NOT launch a Claude"
+echo "session here. Orchestration runs from the project's <project>-run partner workspace"
+echo "(A1 model): the partner drives framework/dispatch.sh against this directory and"
+echo "enforces framework/VERIFY.md as the merge gate. See framework/CLAUDE.md."
