@@ -48,7 +48,7 @@ def price_for(model):
     return prices.get(model.rsplit("/", 1)[-1])
 
 # --- Aggregate OpenCode dispatch records ---
-agg = defaultdict(lambda: {"runs":0,"attempts":0,"dur":0,"in":0,"out":0,"fails":0,"role":"opencode"})
+agg = defaultdict(lambda: {"runs":0,"attempts":0,"dur":0,"in":0,"out":0,"cache":0,"fails":0,"cost":0.0,"costed":0,"role":"opencode"})
 if os.path.exists(cost_jsonl):
     for line in open(cost_jsonl):
         line = line.strip()
@@ -62,7 +62,11 @@ if os.path.exists(cost_jsonl):
         a["dur"] += r.get("duration_s",0) or 0
         if isinstance(r.get("input_tokens"), int):  a["in"]  += r["input_tokens"]
         if isinstance(r.get("output_tokens"), int): a["out"] += r["output_tokens"]
-        if not r.get("verify_passed", True): a["fails"] += 1
+        if isinstance(r.get("cache_read_tokens"), int): a["cache"] += r["cache_read_tokens"]
+        if isinstance(r.get("cost_usd"), (int, float)):
+            a["cost"] += r["cost_usd"]; a["costed"] += 1
+        # verify_passed: false = verify exhausted; null/absent = no verifier configured (not a failure)
+        if r.get("verify_passed") is False: a["fails"] += 1
 
 # --- Count planning cost_events from TASK_LOG (frequency only; tokens rarely known) ---
 plan = defaultdict(int)
@@ -82,14 +86,20 @@ if not agg:
     print("  (no records yet)")
 total = 0.0
 for model, a in sorted(agg.items()):
-    d = est(model, a["in"], a["out"])
-    dollar = f"${d:,.2f}" if d is not None else "  (tokens/price n/a)"
+    # Prefer the actual billed cost (recorded from opencode's session store) over a
+    # price-table estimate; estimate only fills in for records that predate cost_usd.
+    if a["costed"] == a["runs"] and a["runs"] > 0:
+        d, src = a["cost"], "actual"
+    else:
+        e = est(model, a["in"], a["out"])
+        d, src = ((a["cost"] + (e or 0)) or None), "actual+est" if a["costed"] else "est"
+    dollar = f"${d:,.4f} ({src})" if d is not None else "(tokens/price n/a)"
     if d: total += d
     print(f"  {model}")
     print(f"     runs={a['runs']}  verify-fails={a['fails']}  attempts={a['attempts']}  "
-          f"wall={a['dur']}s  in={a['in']:,}  out={a['out']:,}  est={dollar}")
+          f"wall={a['dur']}s  in={a['in']:,}  out={a['out']:,}  cache={a['cache']:,}  {dollar}")
 if total:
-    print(f"  ── OpenCode estimated total: ${total:,.2f} (only models with tokens+price)")
+    print(f"  ── OpenCode total: ${total:,.4f}")
 
 print("\n=== Planning / PM agent spawns (from TASK_LOG cost_event) ===")
 if not plan:

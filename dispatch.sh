@@ -49,22 +49,43 @@ fi
 
 # --- Cost telemetry ---
 # Append one structured record per dispatch to logs/cost.jsonl. Always-available signals
-# (model, tier, attempts, verify result, exit, wall-clock) plus best-effort token counts
-# grepped from the opencode log when present. framework/cost-report.sh rolls these up.
+# (model, tier, attempts, verify result, exit, wall-clock) plus authoritative cost/token
+# figures from opencode's local session store (~/.local/share/opencode/opencode.db): the
+# `session` table records per-session cost (USD, as billed by OpenRouter) and token counts.
+# We sum every session created in the target dir during this dispatch — that covers the
+# primary run, --continue turns (same session), and a fallback-model rerun (second session).
+# opencode's INFO logs do NOT carry usage, so the DB is the only reliable source.
 # Never fatal — telemetry must not affect the dispatch exit code.
 START_EPOCH="$(date +%s)"
 ATTEMPTS_USED=1
+OPENCODE_DB="${OPENCODE_DB:-$HOME/.local/share/opencode/opencode.db}"
+DIR_ABS="$(cd "$DIR" 2>/dev/null && pwd || echo "$DIR")"
 
 emit_cost() {
-  local code="$1" end_epoch dur in_tok out_tok verify_passed
+  local code="$1" end_epoch dur verify_passed row cost_usd in_tok out_tok cache_tok
   end_epoch="$(date +%s)"
   dur=$(( end_epoch - START_EPOCH ))
-  in_tok="$(grep -oiE '(input|prompt)_tokens[":= ]+[0-9]+' "$LOG_FILE" 2>/dev/null | grep -oE '[0-9]+$' | tail -1)"
-  out_tok="$(grep -oiE '(output|completion)_tokens[":= ]+[0-9]+' "$LOG_FILE" 2>/dev/null | grep -oE '[0-9]+$' | tail -1)"
-  [ "$code" -eq 0 ] && verify_passed=true || verify_passed=false
-  printf '{"ts":"%s","role":"opencode","prompt":"%s","model":"%s","tier":"%s","attempts":%s,"verify_passed":%s,"exit":%s,"duration_s":%s,"input_tokens":%s,"output_tokens":%s,"log":"%s"}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(basename "$PROMPT_FILE")" "$ACTIVE_MODEL" "$TIER" \
-    "${ATTEMPTS_USED:-1}" "$verify_passed" "$code" "$dur" "${in_tok:-null}" "${out_tok:-null}" \
+  if [ -z "$VERIFY_CMD" ]; then
+    verify_passed=null   # no verifier configured — exit 0 means "opencode ran", not "verified"
+  elif [ "$code" -eq 0 ]; then
+    verify_passed=true
+  else
+    verify_passed=false
+  fi
+  cost_usd=null; in_tok=null; out_tok=null; cache_tok=null
+  if command -v sqlite3 >/dev/null 2>&1 && [ -r "$OPENCODE_DB" ]; then
+    row="$(sqlite3 -separator '|' "$OPENCODE_DB" \
+      "select round(coalesce(sum(cost),0),6), coalesce(sum(tokens_input),0), coalesce(sum(tokens_output+tokens_reasoning),0), coalesce(sum(tokens_cache_read),0) \
+       from session where directory='${DIR_ABS//\'/\'\'}' and time_created >= ${START_EPOCH}000;" 2>/dev/null)"
+    if [ -n "$row" ]; then
+      IFS='|' read -r cost_usd in_tok out_tok cache_tok <<< "$row"
+    fi
+  fi
+  printf '{"ts":"%s","role":"opencode","prompt":"%s","model":"%s","tier":%s,"attempts":%s,"verify_passed":%s,"exit":%s,"duration_s":%s,"cost_usd":%s,"input_tokens":%s,"output_tokens":%s,"cache_read_tokens":%s,"log":"%s"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(basename "$PROMPT_FILE")" "$ACTIVE_MODEL" \
+    "$([ -n "$TIER" ] && printf '"%s"' "$TIER" || echo null)" \
+    "${ATTEMPTS_USED:-1}" "$verify_passed" "$code" "$dur" \
+    "${cost_usd:-null}" "${in_tok:-null}" "${out_tok:-null}" "${cache_tok:-null}" \
     "$(basename "$LOG_FILE")" >> "${LOG_DIR}/cost.jsonl" 2>/dev/null || true
 }
 
