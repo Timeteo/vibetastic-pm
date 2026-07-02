@@ -2,7 +2,12 @@
 # PM dispatch wrapper — called by PM orchestrator to avoid shell substitution in Claude Code permission checks.
 #
 # Usage:
-#   bash dispatch.sh <model> <project-dir> <prompt-file> [fallback-model] [verify-cmd] [max-attempts] [tier]
+#   bash dispatch.sh [--read-only] <model> <project-dir> <prompt-file> [fallback-model] [verify-cmd] [max-attempts] [tier]
+#
+# --read-only: for diagnosis/review dispatches (RULES.md lesson 2, VERIFY.md diff review).
+#   The model is expected to investigate and report, changing nothing. Enforced structurally:
+#   if the target git tree differs after the run, dispatch exits 21 (changes left in place
+#   for inspection — never auto-reverted). The verify loop is skipped in this mode.
 #
 # Runs opencode on the task. If <verify-cmd> is given, it then verifies the working tree
 # and self-corrects: on a failed verify it continues the SAME opencode session with the
@@ -13,11 +18,18 @@
 #   0   success — opencode ran and, if a verifier was given, it passed
 #   1   opencode infra/model failure — could not produce a run even via the fallback model
 #   20  verify never passed within max-attempts — code runs but is wrong -> PM escalates tier
+#   21  --read-only violated — the run modified the target tree (changes left for inspection)
 #
 # Output capture: opencode assistant output stays on stdout. Full opencode + verifier logs
 # go to a per-run logfile under logs/. On any non-zero exit the log tail is echoed to stderr
 # so failures are never silent. The logfile path is always printed to stderr.
 eval "$(~/.ssh/gh-agent-token.sh)"
+
+READ_ONLY=false
+if [ "$1" = "--read-only" ]; then
+  READ_ONLY=true
+  shift
+fi
 
 MODEL="$1"
 DIR="$2"
@@ -134,6 +146,11 @@ finish() {
   exit "$code"
 }
 
+# --- Read-only mode: snapshot the tree state so violations are detectable ---
+if $READ_ONLY; then
+  TREE_BEFORE="$(git -C "$DIR_ABS" status --porcelain 2>/dev/null | sort)"
+fi
+
 # --- Initial run (with fallback on infra failure) ---
 run_opencode_fresh "$ACTIVE_MODEL"
 if [ $? -ne 0 ]; then
@@ -145,6 +162,18 @@ if [ $? -ne 0 ]; then
   else
     finish 1
   fi
+fi
+
+# --- Read-only mode: enforce that nothing changed; no verify loop ---
+if $READ_ONLY; then
+  TREE_AFTER="$(git -C "$DIR_ABS" status --porcelain 2>/dev/null | sort)"
+  if [ "$TREE_BEFORE" != "$TREE_AFTER" ]; then
+    echo "[dispatch] read-only violation — the run modified the target tree:" >&2
+    diff <(echo "$TREE_BEFORE") <(echo "$TREE_AFTER") >&2 || true
+    echo "[dispatch] changes left in place for inspection (not reverted)." >&2
+    finish 21
+  fi
+  finish 0
 fi
 
 # --- No verifier configured: preserve legacy behavior (build/no-op check is the PM's job) ---

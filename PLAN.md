@@ -54,6 +54,7 @@ tasks:
       - prompts/build-spec.md
     outputs: []
     model: null
+    verify_tier: null   # R0|R1|R2 — assigned at spec time, highest tier touched; see framework/VERIFY.md
     started_at: null
     completed_at: null
     failure_count: 0
