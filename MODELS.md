@@ -77,6 +77,12 @@ Escalation in `.claude/rules/dispatch.md`).
 | `standard` | `openrouter/deepseek/deepseek-v4-pro` | `openrouter/z-ai/glm-5.2` | yes (e2e 2026-06-29) | Multi-file feature, new patterns, moderate complexity |
 | `heavy` | `openrouter/z-ai/glm-5.2` | `openrouter/deepseek/deepseek-v4-pro` | yes (e2e 2026-06-29) | Complex architecture, new subsystems, large context, significant reasoning |
 
+**`fast` is a latency tier, not a cost tier (2026-07-02):** gemini-3-flash-preview prices
+*above* deepseek-v4-pro on both sides ($0.50/$3.00 vs $0.43/$0.87) — its advantage is
+wall-clock (~107s vs ~200–470s observed), not price. Revisit once cost.jsonl has real
+`cost_usd` volume: candidates are a true budget rung (qwen coder, below), collapsing
+`fast` into `standard`, or keeping it as an explicit latency rung.
+
 All three primaries have **1M context** (not "low-context flash" — verified on OpenRouter
 2026-06-29) and were tested end-to-end through opencode (`opencode run` completed a multi-file
 task, exit 0). `deepseek-v4-pro` is both the cheapest and strongest SWE-bench model here, so it
