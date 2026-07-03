@@ -73,15 +73,18 @@ Escalation in `.claude/rules/dispatch.md`).
 
 | Tier | Model | Fallback | Confirmed | Use When |
 |------|-------|----------|-----------|----------|
-| `fast` | `openrouter/google/gemini-3-flash-preview` | `openrouter/deepseek/deepseek-v4-pro` | yes (e2e 2026-06-29) | Simple bug fix, isolated change, clear root cause, no API surface changes |
+| `fast` | `openrouter/qwen/qwen3-coder-flash` | `openrouter/deepseek/deepseek-v4-pro` | **no — e2e test pending** | Simple bug fix, isolated change, clear root cause, no API surface changes |
 | `standard` | `openrouter/deepseek/deepseek-v4-pro` | `openrouter/z-ai/glm-5.2` | yes (e2e 2026-06-29) | Multi-file feature, new patterns, moderate complexity |
 | `heavy` | `openrouter/z-ai/glm-5.2` | `openrouter/deepseek/deepseek-v4-pro` | yes (e2e 2026-06-29) | Complex architecture, new subsystems, large context, significant reasoning |
 
-**`fast` is a latency tier, not a cost tier (2026-07-02):** gemini-3-flash-preview prices
-*above* deepseek-v4-pro on both sides ($0.50/$3.00 vs $0.43/$0.87) — its advantage is
-wall-clock (~107s vs ~200–470s observed), not price. Revisit once cost.jsonl has real
-`cost_usd` volume: candidates are a true budget rung (qwen coder, below), collapsing
-`fast` into `standard`, or keeping it as an explicit latency rung.
+**`fast` re-anchored to a true cost rung (2026-07-02):** gemini-3-flash-preview was dropped —
+it priced *above* deepseek-v4-pro on both sides ($0.50/$3.00 vs $0.43/$0.87), so its only
+advantage was wall-clock latency, which Tim ruled immaterial. `qwen3-coder-flash`
+($0.195/$0.975, 1M ctx) replaces it: coding-specialist, ~55% cheaper than deepseek on input,
+and — decisive given the gemini-3.5-flash stall history — a **non-reasoning** model, so the
+reasoning-stall failure mode can't occur. **Not yet e2e-confirmed through opencode** — run a
+real fast-tier dispatch and mark confirmed before relying on it; until then the deepseek
+fallback covers any failure.
 
 All three primaries have **1M context** (not "low-context flash" — verified on OpenRouter
 2026-06-29) and were tested end-to-end through opencode (`opencode run` completed a multi-file
@@ -125,7 +128,8 @@ offload lane). Context/prices verified on OpenRouter 2026-06-29.
 | `haiku` / `claude-haiku-4-5` | 1.00 | 5.00 | 200K | Subscription only (commit subagent / mechanical steps) |
 | `openrouter/deepseek/deepseek-v4-pro` | 0.43 | 0.87 | 1M | **standard** primary; fast/heavy fallback — cheapest, top SWE-bench |
 | `openrouter/z-ai/glm-5.2` | 0.95 | 3.00 | 1M | **heavy** primary; standard fallback (~Opus-4.8 FrontierSWE) |
-| `openrouter/google/gemini-3-flash-preview` | 0.50 | 3.00 | 1M | **fast** primary — clean tool_calls, fastest |
+| `openrouter/qwen/qwen3-coder-flash` | 0.195 | 0.975 | 1M | **fast** primary — non-reasoning coder specialist (e2e pending) |
+| `openrouter/google/gemini-3-flash-preview` | 0.50 | 3.00 | 1M | Dropped 2026-07-02 (priced above deepseek; latency-only advantage) |
 | `openrouter/google/gemini-3.5-flash` | 1.50 | 9.00 | 1M | Dropped (reasoning-stall on big tasks); kept for reference |
 
 Aliases (`opus`/`sonnet`/`haiku`/`fable`) are what the Claude Code Agent tool accepts for the
@@ -141,7 +145,11 @@ Models to evaluate for future tier assignments. Move to the table above once con
 | Model | Potential tier | Notes |
 |-------|---------------|-------|
 | `openrouter/openai/gpt-5.4` | standard | 73.9% coding score, cheaper than 5.5 — non-Anthropic alt if a tier needs swapping |
-| `openrouter/qwen/qwen-2.5-coder-32b-instruct` | fast | Coding specialist, very cheap; 128K ctx (smaller) |
+| `openrouter/qwen/qwen3.5-flash-02-23` | fast (budget floor) | $0.065/$0.26, 1M ctx — 3× cheaper than qwen3-coder-flash, but a **reasoning model** (the stall-risk class); only adopt after a stall-free e2e test |
+| `openrouter/qwen/qwen3.7-plus` | standard | $0.32/$1.28, 1M ctx — newest Qwen general line; only marginally cheaper than deepseek, no reason to swap today |
+
+(`qwen-2.5-coder-32b-instruct` removed 2026-07-02 — obsolete: $0.66/$1.00, 128K ctx; beaten
+on every axis by the qwen3.x line.)
 
 (`deepseek-v4-pro` and `glm-5.2` were promoted into the active tiers on 2026-06-29 — see OpenCode
 Tiers. `glm-5.2` actual OpenRouter price is $0.95/$3.00, 1M ctx.)
