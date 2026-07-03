@@ -73,7 +73,7 @@ Escalation in `.claude/rules/dispatch.md`).
 
 | Tier | Model | Fallback | Confirmed | Use When |
 |------|-------|----------|-----------|----------|
-| `fast` | `openrouter/qwen/qwen3-coder-flash` | `openrouter/deepseek/deepseek-v4-pro` | **no — e2e test pending** | Simple bug fix, isolated change, clear root cause, no API surface changes |
+| `fast` | `openrouter/qwen/qwen3-coder-flash` | `openrouter/deepseek/deepseek-v4-pro` | yes (e2e 2026-07-02) | Simple bug fix, isolated change, clear root cause, no API surface changes |
 | `standard` | `openrouter/deepseek/deepseek-v4-pro` | `openrouter/z-ai/glm-5.2` | yes (e2e 2026-06-29) | Multi-file feature, new patterns, moderate complexity |
 | `heavy` | `openrouter/z-ai/glm-5.2` | `openrouter/deepseek/deepseek-v4-pro` | yes (e2e 2026-06-29) | Complex architecture, new subsystems, large context, significant reasoning |
 
@@ -82,9 +82,8 @@ it priced *above* deepseek-v4-pro on both sides ($0.50/$3.00 vs $0.43/$0.87), so
 advantage was wall-clock latency, which Tim ruled immaterial. `qwen3-coder-flash`
 ($0.195/$0.975, 1M ctx) replaces it: coding-specialist, ~55% cheaper than deepseek on input,
 and — decisive given the gemini-3.5-flash stall history — a **non-reasoning** model, so the
-reasoning-stall failure mode can't occur. **Not yet e2e-confirmed through opencode** — run a
-real fast-tier dispatch and mark confirmed before relying on it; until then the deepseek
-fallback covers any failure.
+reasoning-stall failure mode can't occur. **E2e-confirmed 2026-07-02**: multi-file task
+through dispatch.sh, verify passed attempt 1, 39s, $0.016 billed, no stall.
 
 All three primaries have **1M context** (not "low-context flash" — verified on OpenRouter
 2026-06-29) and were tested end-to-end through opencode (`opencode run` completed a multi-file
