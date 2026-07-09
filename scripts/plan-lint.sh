@@ -11,7 +11,8 @@
 # Checks (parser is regex-based on purpose — no PyYAML dependency on a stock macOS python3):
 #   - YAML frontmatter block exists (--- ... ---)
 #   - every task has id, stage, title, agent, status, depends_on, failure_count
-#   - status ∈ {pending, in_progress, done, failed}; agent ∈ {designer, architect, opencode, pm}
+#   - status ∈ {pending, in_progress, done, failed}; agent ∈ {designer, architect, opencode, pm, user}
+#     (user = explicit human pass, e.g. a VERIFY.md device-only check)
 #   - task ids unique; every depends_on target exists; dependency graph has no cycles
 #   - failure_count is a non-negative integer
 #   - tier (if present) ∈ {fast, standard, heavy}; verify_tier (if present) ∈ {R0, R1, R2}
@@ -27,11 +28,19 @@ path = sys.argv[1]
 text = open(path).read()
 errors = []
 
-m = re.match(r"\A---\n(.*?)\n---\s*\n", text, re.S)
-if not m:
-    print(f"plan-lint: {path}: no YAML frontmatter block (--- ... ---)", file=sys.stderr)
-    sys.exit(1)
-fm = m.group(1)
+m = re.match(r"\A---\n(.*?)\n---\s*(\n|\Z)", text, re.S)
+if m:
+    fm = m.group(1)
+else:
+    # Tolerate an unclosed frontmatter block (observed in long-running real PLAN.md files:
+    # YAML tasks flow into markdown prose with no closing ---). Lint the whole region; the
+    # '- id:' chunking below ignores non-task prose.
+    m2 = re.match(r"\A---\n(.*)", text, re.S)
+    if not m2:
+        print(f"plan-lint: {path}: no YAML frontmatter block (--- ... ---)", file=sys.stderr)
+        sys.exit(1)
+    print(f"plan-lint: {path}: note — frontmatter never closed with ---; linting whole file")
+    fm = m2.group(1)
 
 # Split the tasks: section into per-task chunks on "  - id:" list items.
 tasks_m = re.search(r"^tasks:\s*$(.*)", fm, re.M | re.S)
@@ -66,7 +75,7 @@ for chunk in chunks:
             errors.append(f"{tid}: missing required field '{req}'")
     if t["status"] and t["status"] not in ("pending", "in_progress", "done", "failed"):
         errors.append(f"{tid}: invalid status '{t['status']}'")
-    if t["agent"] and t["agent"] not in ("designer", "architect", "opencode", "pm"):
+    if t["agent"] and t["agent"] not in ("designer", "architect", "opencode", "pm", "user"):
         errors.append(f"{tid}: invalid agent '{t['agent']}'")
     if t["failure_count"] is not None and not re.fullmatch(r"\d+", t["failure_count"]):
         errors.append(f"{tid}: failure_count must be a non-negative integer, got '{t['failure_count']}'")
