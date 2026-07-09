@@ -55,7 +55,17 @@ VERIFY_CMD="${5:-}"
 MAX_ATTEMPTS="${6:-3}"
 TIER="${7:-}"   # optional: task tier (fast|standard|heavy), recorded in cost telemetry only
 
-LOG_DIR="${OPENCODE_DISPATCH_LOG_DIR:-logs}"
+# Logs anchor to the PM directory, not the caller's cwd: the task prompt always lives in
+# <pm-dir>/prompts/, so default LOG_DIR to the prompts dir's sibling logs/. This keeps
+# cost.jsonl and run logs in one place no matter where the orchestrator invokes dispatch
+# from (e.g. the <project>-run partner workspace). OPENCODE_DISPATCH_LOG_DIR overrides.
+if [ -n "${OPENCODE_DISPATCH_LOG_DIR:-}" ]; then
+  LOG_DIR="$OPENCODE_DISPATCH_LOG_DIR"
+else
+  PROMPT_DIR="$(cd "$(dirname "$PROMPT_FILE")" 2>/dev/null && pwd)"
+  LOG_DIR="${PROMPT_DIR:+$(dirname "$PROMPT_DIR")/logs}"
+  LOG_DIR="${LOG_DIR:-logs}"
+fi
 mkdir -p "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/$(basename "${PROMPT_FILE%.md}")-$(date +%Y%m%d-%H%M%S).log"
 
