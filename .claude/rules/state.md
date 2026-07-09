@@ -17,11 +17,13 @@ Include enough detail to reconstruct what happened without reading PLAN.md. On f
 
 ### Cost telemetry (`cost_event`)
 
-After every subagent spawn (Designer / Architect / Tech Lead) **and** before each
-`dispatch.sh` call, append a `cost_event` so per-role model spend is measurable. OpenCode
-dispatches are also recorded automatically by dispatch.sh into `logs/cost.jsonl`; the
-`cost_event` log is what attributes the *planning* models, which run as Claude Code Agents and
-are invisible to dispatch.sh.
+Two of the three telemetry streams are mechanical — no orchestrator discipline required:
+OpenCode dispatches are recorded by dispatch.sh into `logs/cost.jsonl`, and every Agent tool
+spawn is recorded by the `PostToolUse` hook (`framework/scripts/log-agent-spawn.py`, wired by
+setup.sh) into `logs/agent-spawns.jsonl`. The manual `cost_event` below adds what the hook
+cannot know: the **role** (Designer vs Tech Lead vs Reviewer) and task attribution. Append
+one after every subagent spawn and before each `dispatch.sh` call; if you forget, the hook
+log still catches the spawn, just without role attribution.
 
 ```markdown
 ### <ISO8601> · cost_event
@@ -34,8 +36,8 @@ note: <one line, optional>
 ```
 ```
 
-Run `bash framework/cost-report.sh` to roll up `logs/cost.jsonl` + these `cost_event` entries
-against the `MODELS.md` Pricing table — the evidence base for tuning tiers (cheapest model that
+Run `bash framework/cost-report.sh` to roll up `logs/cost.jsonl` + `logs/agent-spawns.jsonl`
++ these `cost_event` entries against the `MODELS.md` Pricing table — the evidence base for tuning tiers (cheapest model that
 clears the bar; escalate on proof).
 
 ---
@@ -47,7 +49,9 @@ After every agent return or OpenCode execution, before doing anything else:
 1. Read current `PLAN.md` (do not use a cached version)
 2. Apply the specific field updates for this task only
 3. Write `PLAN.md`
-4. Append to `TASK_LOG.md`
+4. Run `bash framework/scripts/plan-lint.sh` — non-zero exit means the write corrupted
+   PLAN.md's structure; fix it now, before anything reads the file
+5. Append to `TASK_LOG.md`
 
 Never batch multiple task updates into one write. Each task result gets its own read-write cycle.
 

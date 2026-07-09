@@ -128,8 +128,20 @@ loop degrades to the legacy single-run behavior.
 Dispatch:
 
 ```bash
-bash framework/dispatch.sh <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" "<tasks[n].fallback_model>" "<verify-cmd>" 3 "<tasks[n].tier>" 2>&1
+bash framework/dispatch.sh --worktree "<branch>" <tasks[n].model> ../<project-name>/ "${TASK_PROMPT}" "<tasks[n].fallback_model>" "<verify-cmd>" 3 "<tasks[n].tier>" 2>&1
 ```
+
+- `--worktree <branch>`: **always pass it for build tasks.** The builder runs in an isolated
+  git worktree (`../<project-name>-worktrees/task-T0XX/`) on `<branch>`, never in the live
+  checkout — the human's uncommitted work is untouchable and parallel dispatches can't
+  collide. `<branch>` is the task's `branch_name` from its notes (Tech Lead tasks), or
+  `task/<task-id>` if the task has none. dispatch.sh creates the branch from current HEAD if
+  it doesn't exist, reuses the worktree on a re-dispatch (tier escalation), and prints the
+  path to stderr as `[dispatch] worktree: <path>`. All post-dispatch steps (staged-change
+  check, commit, PR) run **in that worktree path**, not the live checkout; after the PR is
+  opened, remove it: `git -C ../<project-name>/ worktree remove <path>`. Read-only
+  review/diagnosis dispatches may target either the worktree (to review its diff) or the
+  live checkout, and don't need `--worktree` themselves.
 
 - 4th arg `fallback_model`: if empty, pass `""` so the verifier stays positionally correct.
 - 5th arg `verify-cmd`: the single-line verify command from `PROJECT.md`. dispatch.sh runs it
@@ -152,11 +164,12 @@ echoes the last 40 lines so a failure is never silent.
 | `20` | Code runs but the verifier never passed within the attempt budget | **Tier escalation** (below) — not a `failure_count` event |
 | other non-0 | opencode infra/model failure (even via fallback) | Task failure — see `state.md` (`failure_count +1`) |
 
-**Exit 0 — staged-change check before opening PR:**
+**Exit 0 — staged-change check before opening PR** (run in the worktree path dispatch.sh
+printed, not the live checkout):
 
 ```bash
-git -C ../<project-name>/ diff --cached --quiet
-git -C ../<project-name>/ status --short
+git -C <worktree-path> diff --cached --quiet
+git -C <worktree-path> status --short
 ```
 
 - Staged uncommitted changes → spawn a `haiku` subagent to commit with an appropriate message (mechanical — no reasoning needed), then proceed to PR Opening
@@ -225,6 +238,8 @@ EOF
 - Issue number from `tasks[n].notes`
 - Summary and test plan from the relevant section of `prompts/build-spec.md`
 
-After PR created: append `pr_opened` (with PR URL) to TASK_LOG, mark task `done`.
+After PR created: append `pr_opened` (with PR URL) to TASK_LOG, mark task `done`, and
+remove the task's worktree (`git -C ../<project-name>/ worktree remove <worktree-path>`;
+add `--force` only if you've confirmed nothing in it is still needed).
 
 If `gh pr create` fails: log the error, mark task `done` anyway — do not let a PR failure block task completion.

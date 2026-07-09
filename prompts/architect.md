@@ -51,12 +51,6 @@ Path: `{{TARGET_PROJECT_PATH}}`
 
 ---
 
-## Model Selection Rules
-
-{{MODEL_SELECTION_RULES}}
-
----
-
 ## Step 1 — Assess the Target Project
 
 Before designing anything, inspect the target project:

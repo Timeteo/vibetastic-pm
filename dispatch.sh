@@ -2,12 +2,24 @@
 # PM dispatch wrapper — called by PM orchestrator to avoid shell substitution in Claude Code permission checks.
 #
 # Usage:
-#   bash dispatch.sh [--read-only] <model> <project-dir> <prompt-file> [fallback-model] [verify-cmd] [max-attempts] [tier]
+#   bash dispatch.sh [--read-only] [--worktree <branch>] <model> <project-dir> <prompt-file> [fallback-model] [verify-cmd] [max-attempts] [tier]
 #
 # --read-only: for diagnosis/review dispatches (RULES.md lesson 2, VERIFY.md diff review).
 #   The model is expected to investigate and report, changing nothing. Enforced structurally:
-#   if the target git tree differs after the run, dispatch exits 21 (changes left in place
+#   if the target git tree differs after the run (status, or content of tracked files —
+#   including files that were already dirty), dispatch exits 21 (changes left in place
 #   for inspection — never auto-reverted). The verify loop is skipped in this mode.
+#
+# --worktree <branch>: run the builder in an isolated git worktree instead of the live
+#   checkout. The worktree is created at <project-dir>/../<project>-worktrees/<prompt-basename>
+#   on <branch> (created from the current HEAD if it doesn't exist; reused if the path
+#   already exists from a prior dispatch of the same task, e.g. a tier-escalation re-run).
+#   opencode and the verifier both run inside the worktree, so the human's working tree and
+#   any uncommitted work are untouchable, parallel dispatches can't collide, and opencode's
+#   per-directory session store makes --continue unambiguous per task. The worktree is left
+#   in place — the PM inspects it, opens the PR from its branch, then removes it with
+#   `git worktree remove <path>`. The worktree path is printed to stderr as
+#   "[dispatch] worktree: <path>".
 #
 # Runs opencode on the task. If <verify-cmd> is given, it then verifies the working tree
 # and self-corrects: on a failed verify it continues the SAME opencode session with the
@@ -26,10 +38,14 @@
 eval "$(~/.ssh/gh-agent-token.sh)"
 
 READ_ONLY=false
-if [ "$1" = "--read-only" ]; then
-  READ_ONLY=true
-  shift
-fi
+WORKTREE_BRANCH=""
+while true; do
+  case "$1" in
+    --read-only) READ_ONLY=true; shift ;;
+    --worktree)  WORKTREE_BRANCH="$2"; shift 2 ;;
+    *) break ;;
+  esac
+done
 
 MODEL="$1"
 DIR="$2"
@@ -72,6 +88,25 @@ START_EPOCH="$(date +%s)"
 ATTEMPTS_USED=1
 OPENCODE_DB="${OPENCODE_DB:-$HOME/.local/share/opencode/opencode.db}"
 DIR_ABS="$(cd "$DIR" 2>/dev/null && pwd || echo "$DIR")"
+
+# --- Worktree isolation: builders never touch the live checkout ---
+if [ -n "$WORKTREE_BRANCH" ]; then
+  WT_ROOT="$(dirname "$DIR_ABS")/$(basename "$DIR_ABS")-worktrees"
+  WT_PATH="${WT_ROOT}/$(basename "${PROMPT_FILE%.md}")"
+  mkdir -p "$WT_ROOT"
+  if [ ! -d "$WT_PATH" ]; then
+    if git -C "$DIR_ABS" show-ref --verify --quiet "refs/heads/${WORKTREE_BRANCH}"; then
+      git -C "$DIR_ABS" worktree add "$WT_PATH" "$WORKTREE_BRANCH" >&2 \
+        || { echo "[dispatch] worktree add failed (branch ${WORKTREE_BRANCH})" >&2; exit 1; }
+    else
+      git -C "$DIR_ABS" worktree add -b "$WORKTREE_BRANCH" "$WT_PATH" >&2 \
+        || { echo "[dispatch] worktree add -b failed (branch ${WORKTREE_BRANCH})" >&2; exit 1; }
+    fi
+  fi
+  DIR="$WT_PATH"
+  DIR_ABS="$WT_PATH"
+  echo "[dispatch] worktree: $WT_PATH (branch ${WORKTREE_BRANCH})" >&2
+fi
 
 emit_cost() {
   local code="$1" end_epoch dur verify_passed row cost_usd in_tok out_tok cache_tok
@@ -147,8 +182,17 @@ finish() {
 }
 
 # --- Read-only mode: snapshot the tree state so violations are detectable ---
+# Snapshot = porcelain status (catches new/deleted/newly-modified files) + a hash of the
+# full diff against HEAD (catches further edits to files that were ALREADY dirty, which
+# leave the status line unchanged).
+tree_state() {
+  {
+    git -C "$DIR_ABS" status --porcelain | sort
+    git -C "$DIR_ABS" diff HEAD | shasum
+  } 2>/dev/null
+}
 if $READ_ONLY; then
-  TREE_BEFORE="$(git -C "$DIR_ABS" status --porcelain 2>/dev/null | sort)"
+  TREE_BEFORE="$(tree_state)"
 fi
 
 # --- Initial run (with fallback on infra failure) ---
@@ -166,7 +210,7 @@ fi
 
 # --- Read-only mode: enforce that nothing changed; no verify loop ---
 if $READ_ONLY; then
-  TREE_AFTER="$(git -C "$DIR_ABS" status --porcelain 2>/dev/null | sort)"
+  TREE_AFTER="$(tree_state)"
   if [ "$TREE_BEFORE" != "$TREE_AFTER" ]; then
     echo "[dispatch] read-only violation — the run modified the target tree:" >&2
     diff <(echo "$TREE_BEFORE") <(echo "$TREE_AFTER") >&2 || true

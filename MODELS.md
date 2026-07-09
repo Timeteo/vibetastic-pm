@@ -127,7 +127,7 @@ offload lane). Context/prices verified on OpenRouter 2026-06-29.
 | `haiku` / `claude-haiku-4-5` | 1.00 | 5.00 | 200K | Subscription only (commit subagent / mechanical steps) |
 | `openrouter/deepseek/deepseek-v4-pro` | 0.43 | 0.87 | 1M | **standard** primary; fast/heavy fallback — cheapest, top SWE-bench |
 | `openrouter/z-ai/glm-5.2` | 0.95 | 3.00 | 1M | **heavy** primary; standard fallback (~Opus-4.8 FrontierSWE) |
-| `openrouter/qwen/qwen3-coder-flash` | 0.195 | 0.975 | 1M | **fast** primary — non-reasoning coder specialist (e2e pending) |
+| `openrouter/qwen/qwen3-coder-flash` | 0.195 | 0.975 | 1M | **fast** primary — non-reasoning coder specialist (e2e confirmed 2026-07-02) |
 | `openrouter/google/gemini-3-flash-preview` | 0.50 | 3.00 | 1M | Dropped 2026-07-02 (priced above deepseek; latency-only advantage) |
 | `openrouter/google/gemini-3.5-flash` | 1.50 | 9.00 | 1M | Dropped (reasoning-stall on big tasks); kept for reference |
 

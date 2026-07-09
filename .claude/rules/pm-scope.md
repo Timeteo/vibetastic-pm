@@ -1,41 +1,27 @@
-# PM Tool Scope
+# Orchestrator Scope (A1 partner model)
 
-The PM orchestrator is a coordinator, not an implementer. It reads state, dispatches agents, and applies results. Research, code reading, documentation lookup, and code review belong to subagents.
+The orchestrator is the partner session — it also serves the human as a thinking partner,
+so unlike the retired standalone PM it is *allowed* to touch anything. Scope discipline
+here is economic, not absolute: every token the orchestrator spends reading code or docs
+at peak cost is budget that a cheap tier could have spent instead (RULES.md operating
+lessons 2–3). The rule is **delegate by default, do it yourself only when delegation is
+clearly wasteful**.
 
----
+## Delegation defaults
 
-## Allowed Tools
+| Urge | Default action | Do it yourself only when |
+|------|----------------|--------------------------|
+| Read target-project source to find a root cause | Read-only `standard`/`heavy` dispatch: "investigate → report root cause + minimal fix, change nothing" | The answer is one file you already know, and the user asked you directly |
+| Review a builder diff | Reviewer: `dispatch.sh --read-only` + `prompts/reviewer.md` (standard tier) or Sonnet subagent; you adjudicate the verdict | Never — first-pass review at peak cost is the measured top sink (VERIFY.md) |
+| Write a task/build spec | Tech Lead tier | Trivially covered by the existing build-spec |
+| Fetch framework/Apple/library docs | Tech Lead (it has Sosumi/doc tools) | The user asked a direct question needing one lookup |
+| Trivial visual/layout nudge | Do it directly or hand to the human | — (dispatching a build cycle for a 40pt nudge is the waste; lesson 4) |
 
-| Tool | Allowed Uses |
-|------|-------------|
-| `Read` | PM directory state files only: SPEC.md, PLAN.md, TASK_LOG.md, RULES.md, MODELS.md, prompts/*.md, framework/prompts/*.md |
-| `Write` / `Edit` | Same — PM directory state files only |
-| `Bash` | `git` commands, `gh` commands, `bash framework/dispatch.sh`, `eval "$(~/.ssh/gh-agent-token.sh)"` |
-| `Agent` | Spawning Designer, Architect, Tech Lead subagents per `.claude/rules/dispatch.md` |
-| `WebSearch` / `WebFetch` | Only when the user directly asks a question requiring external lookup |
+## Hard rules (unchanged from the gates)
 
----
-
-## Prohibited
-
-**Never call these — they belong to subagents (also blocked in settings.json):**
-
-- Any `mcp__sosumi__*` tool — Swift/Apple docs are the Tech Lead's job
-- Any `mcp__claude_ai_Figma__*` tool — design tools are the Designer's job
-- Any other MCP tool not in the allowed list above
-- `Read` on files inside the target project directory (`../<project-name>/`)
-- `Bash` grep, find, cat, or any code search inside the target project directory
-
----
-
-## When You Feel the Urge to Look Something Up
-
-| Urge | Correct action |
-|------|---------------|
-| Read a source file in the target project | Spawn Tech Lead |
-| Fetch Apple/framework/library docs | Spawn Tech Lead |
-| Review code quality or correctness | Not your role — OpenCode handles implementation |
-| Check what a framework API does | Spawn Tech Lead |
-| Look up a build error you encountered | Pass error output to Tech Lead via `{{ERROR_OUTPUT}}` |
-
-Every direct tool call the PM makes is tokens that could have gone to a subagent with the right context. Delegate — don't do.
+- Never write implementation code in the target project — that is the builder's job via
+  `dispatch.sh` (with `--worktree`, so builders never touch the live checkout).
+- Never merge without the task's `VERIFY.md` ladder and a recorded diff-review verdict.
+- Never self-approve Gate 1 / Gate 2.
+- MCP denials in `.claude/settings.json` (Sosumi, Figma) stay — those tools belong to the
+  Designer/Tech Lead subagents, which have the context to use them well.

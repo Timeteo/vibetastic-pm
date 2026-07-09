@@ -19,9 +19,9 @@ review work to cheap tiers, and enforces the gates.
 
 Read `framework/RULES.md` before orchestrating. `VERIFY.md` defines the merge gate.
 `MODELS.md` is the single source of truth for model/tier selection. The `.claude/rules/`
-files (`lifecycle`, `dispatch`, `state`, `economy`, `pm-scope`) document the detailed
-mechanics — they were written for the retired standalone PM session, but their state
-formats, dispatch loop, and gate procedures apply unchanged to whoever orchestrates.
+files document the detailed mechanics: `lifecycle`, `dispatch`, `state`, and `economy`
+apply unchanged to whoever orchestrates; `pm-scope` defines the orchestrator's delegation
+defaults under the A1 partner model.
 
 ---
 
@@ -31,6 +31,9 @@ formats, dispatch loop, and gate procedures apply unchanged to whoever orchestra
   state — never raw byproducts. Raw logs go to `logs/`/`artifacts/`.
 - **Background the long pole.** Builder dispatches run as background processes; only a
   summary (verify result, PR link, notable findings) returns to the thread.
+- **Builders run isolated.** Always dispatch build tasks with `--worktree <branch>` — the
+  builder works in a per-task git worktree, never the live checkout (see
+  `.claude/rules/dispatch.md`).
 - **State on disk, not in context.** PLAN.md / TASK_LOG.md are read on demand.
 - **Delegate the loud work.** Spec-writing → Tech Lead tier; first-pass diff review →
   Reviewer (read-only cheap dispatch); open-ended diagnosis → read-only `standard`/`heavy`
@@ -47,7 +50,9 @@ formats, dispatch loop, and gate procedures apply unchanged to whoever orchestra
 | `prompts/` | Rendered task/review prompts |
 | `framework/` | Read-only subtree of this repo |
 
-**Write discipline:** read the current file before every write.
+**Write discipline:** read the current file before every write. After every PLAN.md write,
+run `bash framework/scripts/plan-lint.sh` — non-zero exit means the write corrupted the
+structure; fix it before anything reads the file.
 
 ## Lifecycle gates (summary)
 

@@ -93,7 +93,9 @@ All model assignments are defined in `framework/MODELS.md`. That file is the sin
 
 **For OpenCode tasks**: the Tech Lead recommends a tier (`fast` / `standard` / `heavy`) in its output metadata. The PM reads `framework/MODELS.md` and writes the corresponding model slug to `tasks[n].model` in PLAN.md before dispatching. For Stage 2 Architect-selected tasks, the Architect classifies the task complexity and picks a tier directly.
 
-**Fallback**: if the selected model is unavailable, use the `fast` tier model from `framework/MODELS.md`.
+**Fallback**: each tier's fallback model is the `Fallback` column of the OpenCode Tiers
+table in `framework/MODELS.md` — dispatch.sh retries with it automatically on an infra
+failure of the primary.
 
 ---
 
@@ -196,9 +198,9 @@ These override convenience. Each cost real cycles when ignored.
 
 ### Architect
 - **Receives:** SPEC.md, `prompts/design-spec.md`, target project path, RULES.md (model selection section)
-- **Returns:** Structured build spec (markdown) to be written to `prompts/build-spec.md`, plus selected model id
-- **Does:** Query OpenRouter for model selection, construct OpenCode invocation command
-- **Does not:** Execute OpenCode directly — returns the command string to PM
+- **Returns:** Structured build spec (markdown) to be written to `prompts/build-spec.md`, plus a selected tier (`fast`/`standard`/`heavy`) in the result YAML
+- **Does:** Classify task complexity against the tier definitions in `framework/MODELS.md` (the curated inventory — it does **not** query OpenRouter)
+- **Does not:** Execute OpenCode or pick raw model slugs — the PM resolves tier → model/fallback from MODELS.md
 
 ### Tech Lead
 - **Receives:** Issue description, full build-spec, PLAN.md summary, target project path, optional error output
@@ -215,7 +217,7 @@ These override convenience. Each cost real cycles when ignored.
 - **Why:** the intent-review rung of the gate (`VERIFY.md`) must run on every diff; running it on Opus was the measured top cost sink, so Opus only adjudicates
 
 ### OpenCode (via PM shell invocation)
-- **Invoked with:** `bash framework/dispatch.sh <model> <target-project-path> <per-task-prompt-file>` — PM extracts a task-scoped prompt file via awk before calling dispatch (see CLAUDE.md OpenCode section)
+- **Invoked with:** `bash framework/dispatch.sh --worktree <branch> <model> <target-project-path> <per-task-prompt-file> [fallback] [verify-cmd] [max-attempts] [tier]` — PM extracts a task-scoped prompt file via awk before calling dispatch (see `.claude/rules/dispatch.md`). `--worktree` isolates the builder in a per-task git worktree so the live checkout is never touched.
 - **PM captures:** stdout/stderr, exit code
 - **On success:** PM marks task done, logs output summary
 - **On failure:** PM writes exit code + stderr to `error` field, evaluates retry

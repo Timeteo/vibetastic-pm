@@ -8,15 +8,18 @@
 
 set -e
 
-if [ $# -ne 3 ]; then
-  echo "Usage: bash framework/setup.sh <project-name> <absolute-path-to-code-dir> <org/repo>"
-  echo "Example: bash framework/setup.sh hometastic /Users/tim/Developer/hometastic-code Fricktastic/hometastic-code"
+if [ $# -lt 3 ] || [ $# -gt 4 ]; then
+  echo "Usage: bash framework/setup.sh <project-name> <absolute-path-to-code-dir> <org/repo> [verify-cmd]"
+  echo "Example: bash framework/setup.sh hometastic /Users/tim/Developer/hometastic-code Fricktastic/hometastic-code 'swift build'"
+  echo "verify-cmd: single-line command, run in the code dir, exit 0 = change didn't break the project."
+  echo "            Powers dispatch.sh's self-correction loop. Omit to disable (loop degrades to single run)."
   exit 1
 fi
 
 PROJECT_NAME="$1"
 CODE_DIR="$2"
 ISSUE_REPO="$3"
+VERIFY_CMD="${4:-}"
 PM_DIR="$(pwd)"
 
 if [ ! -d "$CODE_DIR" ]; then
@@ -61,6 +64,19 @@ cat > .claude/settings.json <<EOF
       "mcp__claude_ai_Figma__use_figma",
       "mcp__claude_ai_Figma__whoami"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PM_DIR}/framework/scripts/log-agent-spawn.py\""
+          }
+        ]
+      }
+    ]
   }
 }
 EOF
@@ -81,6 +97,16 @@ setup_at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 | PM directory | \`${PM_DIR}\` |
 | Code directory | \`${CODE_DIR}\` |
 | Issue repo | \`${ISSUE_REPO}\` |
+
+## Verify command
+
+<!-- Single-line command run in the code directory after each OpenCode task. Exit 0 = the
+     task didn't break the project. Passed to dispatch.sh as the verifier; on failure the loop
+     feeds its output back to the model and retries. Leave the code block empty to disable. -->
+
+\`\`\`
+${VERIFY_CMD}
+\`\`\`
 
 ## Notes
 

@@ -5,9 +5,12 @@
 > **retired**: orchestration now runs from the project's `<project>-run` partner workspace,
 > which drives `framework/dispatch.sh` directly and enforces `framework/VERIFY.md` as the
 > merge gate — see `CLAUDE.md` (v2). The mechanics below (setup.sh, subtree layout,
-> SPEC/PLAN/TASK_LOG flow, gates, dispatch/verify loop, tier escalation) are still accurate;
-> read "the PM" as "the partner-orchestrator" and ignore instructions to launch `claude`
-> in the `-pm/` directory.
+> SPEC/PLAN/TASK_LOG flow, Gate 1/Gate 2, dispatch/verify loop, tier escalation) are still
+> accurate; read "the PM" as "the partner-orchestrator" and ignore instructions to launch
+> `claude` in the `-pm/` directory. **Also historical: Gate 3.** Stage transitions no longer
+> wait for "proceed" — they auto-advance with a posted summary (RULES.md Gate 3). Every
+> "type proceed" below is the old behavior. Model names in examples (Gemini Flash, Opus
+> Designer) are historical too — `framework/MODELS.md` is the source of truth.
 
 ## TL;DR
 
@@ -21,7 +24,7 @@ Everything else — subagent dispatch, model selection, retries, state managemen
 
 **One-time setup** (run before first `claude` invocation):
 ```bash
-bash framework/setup.sh <project-name> /absolute/path/to/code-dir
+bash framework/setup.sh <project-name> /absolute/path/to/code-dir <org/repo> ['verify-cmd']
 ```
 
 **Framework updates** (without touching project files):
@@ -59,8 +62,10 @@ git subtree add --prefix framework framework main --squash
 # Symlink CLAUDE.md to the root so Claude Code auto-loads it
 ln -s framework/CLAUDE.md CLAUDE.md
 
-# Run one-time project setup (writes .claude/settings.json and PROJECT.md)
-bash framework/setup.sh my-app /absolute/path/to/my-app
+# Run one-time project setup (writes .claude/settings.json and PROJECT.md).
+# 4th arg (optional): the single-line verify command powering dispatch.sh's
+# self-correction loop.
+bash framework/setup.sh my-app /absolute/path/to/my-app my-org/my-app 'npm test'
 ```
 
 To pull framework updates later (project files are never touched):
@@ -245,7 +250,7 @@ Type `proceed`. The PM runs each Implementation task via shell — no Agent spaw
 bash framework/dispatch.sh <model> ../my-app/ prompts/task-T00X.md 2>&1
 ```
 
-The model is the Architect's selection (written to `tasks[n].model` in PLAN.md). It will never be Opus — see the Model Tier Policy in `RULES.md`. Opus is reserved for the Designer and Architect planning agents only; OpenCode runs on the best available Sonnet-class or equivalent coding model.
+The model comes from the task's tier, resolved against `framework/MODELS.md`. It is never an Anthropic model — the opencode tiers are non-Anthropic only (MODELS.md hard invariant); Anthropic models run exclusively on the subscription side via the Agent tool.
 
 PM captures exit code and output. On success: task marked `done`. Tasks with no inter-dependencies within a stage may run in parallel at the PM's discretion.
 
@@ -342,9 +347,9 @@ One interrupted run counts as one failure. If the task was already at `failure_c
 |---|---|---|
 | **Gate 1** | SPEC status is `draft` | User types `approved` |
 | **Gate 2** | Task `failure_count` reaches 2 | User chooses retry / skip / abort |
-| **Gate 3** | All tasks in a stage reach `done` | User types `proceed` |
+| **Gate 3** | All tasks in a stage reach `done` | Nothing — auto-advances with a posted summary (user can interject) |
 
-Gate numbers refer to gate *type*, not the order they appear in a session. On a clean run, the sequence is: Gate 1 → Gate 3 → Gate 3 → Gate 3. Gate 2 only appears when something breaks.
+Gate numbers refer to gate *type*, not the order they appear in a session. On a clean run, the only hard stop is Gate 1. Gate 2 only appears when something breaks.
 
 ---
 
@@ -369,11 +374,12 @@ claude
 
 Three `proceed`s and one `approved`. Everything else is autonomous.
 
-**Agent roster:**
+**Agent roster** (models per `framework/MODELS.md` — the source of truth):
 
 | Agent | Model | Runs | Job |
 |---|---|---|---|
-| Designer | Opus | Once | Design spec |
-| Architect | Opus | Once | Build spec + OpenCode model selection |
-| Tech Lead | Sonnet | Per new mid-project task | Bug/feature → task spec |
-| OpenCode | Gemini 2.5 Flash (or Architect selection) | Per implementation task | Write code |
+| Designer | Sonnet (escalate Opus) | Once + per new UI work | Design spec |
+| Architect | Opus | Once | Build spec + OpenCode tier selection |
+| Tech Lead | Sonnet (escalate Opus) | Per new mid-project task | Bug/feature → task spec |
+| Reviewer | opencode `standard` tier, read-only | Per builder diff | First-pass diff review; orchestrator adjudicates |
+| OpenCode | tier ladder `fast`→`standard`→`heavy` | Per implementation task | Write code (in a per-task worktree) |

@@ -1,6 +1,8 @@
 #!/bin/bash
 # Cost rollup for the PM framework. Reads:
-#   - logs/cost.jsonl   (one record per OpenCode dispatch, written by dispatch.sh)
+#   - logs/cost.jsonl          (one record per OpenCode dispatch, written by dispatch.sh)
+#   - logs/agent-spawns.jsonl  (one record per Agent tool spawn, written mechanically by the
+#                               PostToolUse hook scripts/log-agent-spawn.py)
 #   - TASK_LOG.md        (cost_event entries the PM logs per planning-agent spawn)
 #   - MODELS.md          (the Pricing table → $/Mtok, source of truth)
 # and prints per-model rollups: runs, attempts, wall-clock, tokens, and $ estimate
@@ -106,4 +108,21 @@ if not plan:
     print("  (no cost_event entries — see state.md to enable PM-side logging)")
 for (role, model), n in sorted(plan.items()):
     print(f"  {role:10s} {model:14s} ×{n}")
+
+# --- Agent tool spawns recorded mechanically by the PostToolUse hook ---
+spawns = defaultdict(int)
+spawn_log = os.path.join(os.path.dirname(cost_jsonl), "agent-spawns.jsonl")
+if os.path.exists(spawn_log):
+    for line in open(spawn_log):
+        line = line.strip()
+        if not line: continue
+        try: r = json.loads(line)
+        except json.JSONDecodeError: continue
+        spawns[(r.get("subagent_type") or "?", r.get("model") or "(inherited)")] += 1
+
+print("\n=== Agent tool spawns (from logs/agent-spawns.jsonl, hook-recorded) ===")
+if not spawns:
+    print("  (no records — hook not wired or no spawns yet; see setup.sh hooks block)")
+for (stype, model), n in sorted(spawns.items()):
+    print(f"  {stype:18s} {model:14s} ×{n}")
 PY
