@@ -14,6 +14,13 @@
 #   checkout. The worktree is created at <project-dir>/../<project>-worktrees/<prompt-basename>
 #   on <branch> (created from the current HEAD if it doesn't exist; reused if the path
 #   already exists from a prior dispatch of the same task, e.g. a tier-escalation re-run).
+#   If <branch> is already checked out in ANY existing worktree (e.g. a fixup dispatch with a
+#   different prompt name onto the same PR branch), that worktree is reused instead of
+#   attempting a colliding `worktree add`.
+#   Builder credential stripping: worktree dispatches run opencode with GH_TOKEN/GITHUB_TOKEN
+#   unset and GH_CONFIG_DIR pointed at an empty dir, and the worktree's remote.origin.pushurl
+#   set (per-worktree config) to an invalid URL — builders cannot push or open PRs; the PM
+#   pushes from the live checkout, or unsets the worktree pushurl first.
 #   opencode and the verifier both run inside the worktree, so the human's working tree and
 #   any uncommitted work are untouchable, parallel dispatches can't collide, and opencode's
 #   per-directory session store makes --continue unambiguous per task. The worktree is left
@@ -25,6 +32,10 @@
 # and self-corrects: on a failed verify it continues the SAME opencode session with the
 # verifier output appended and re-verifies, up to <max-attempts> verify checks (default 3).
 # This inner correction loop runs entirely in bash — no PM tokens are spent per iteration.
+#
+# Salvage: a builder exiting non-zero after self-committing completed work (clean tree, new
+# commits since dispatch start) is NOT treated as a failure — the fallback is skipped and the
+# committed state goes straight to the verifier.
 #
 # Exit codes (the PM branches on these):
 #   0   success — opencode ran and, if a verifier was given, it passed
@@ -100,11 +111,19 @@ OPENCODE_DB="${OPENCODE_DB:-$HOME/.local/share/opencode/opencode.db}"
 DIR_ABS="$(cd "$DIR" 2>/dev/null && pwd || echo "$DIR")"
 
 # --- Worktree isolation: builders never touch the live checkout ---
+BUILDER_ENV=()
 if [ -n "$WORKTREE_BRANCH" ]; then
   WT_ROOT="$(dirname "$DIR_ABS")/$(basename "$DIR_ABS")-worktrees"
   WT_PATH="${WT_ROOT}/$(basename "${PROMPT_FILE%.md}")"
-  mkdir -p "$WT_ROOT"
-  if [ ! -d "$WT_PATH" ]; then
+  # If the branch is already checked out in some worktree (re-dispatch, review fixup on the
+  # same PR branch under a different prompt name), reuse that path — `worktree add` would
+  # hard-fail on an already-checked-out branch (issue #2).
+  EXISTING_WT="$(git -C "$DIR_ABS" worktree list --porcelain 2>/dev/null \
+    | awk -v b="branch refs/heads/${WORKTREE_BRANCH}" '/^worktree /{p=substr($0,10)} $0==b{print p; exit}')"
+  if [ -n "$EXISTING_WT" ]; then
+    WT_PATH="$EXISTING_WT"
+  elif [ ! -d "$WT_PATH" ]; then
+    mkdir -p "$WT_ROOT"
     if git -C "$DIR_ABS" show-ref --verify --quiet "refs/heads/${WORKTREE_BRANCH}"; then
       git -C "$DIR_ABS" worktree add "$WT_PATH" "$WORKTREE_BRANCH" >&2 \
         || { echo "[dispatch] worktree add failed (branch ${WORKTREE_BRANCH})" >&2; exit 1; }
@@ -116,7 +135,24 @@ if [ -n "$WORKTREE_BRANCH" ]; then
   DIR="$WT_PATH"
   DIR_ABS="$WT_PATH"
   echo "[dispatch] worktree: $WT_PATH (branch ${WORKTREE_BRANCH})" >&2
+
+  # Builders must not push or open PRs (issue #3) — the PM owns PR opening (dispatch.md).
+  # Enforce structurally, not by prompt: run opencode with gh unauthenticated (tokens unset,
+  # GH_CONFIG_DIR pointed at an empty dir) and poison this worktree's pushurl so `git push`
+  # fails fast. The pushurl is per-worktree config, so the live checkout and other worktrees
+  # are unaffected; the PM pushes from the live checkout (`git -C <project-dir> push origin
+  # <branch>`) or unsets it first (`git -C <wt> config --worktree --unset remote.origin.pushurl`).
+  BUILDER_GH_DIR="$(mktemp -d)"
+  BUILDER_ENV=(env -u GH_TOKEN -u GITHUB_TOKEN GH_CONFIG_DIR="$BUILDER_GH_DIR")
+  git -C "$WT_PATH" config extensions.worktreeConfig true 2>/dev/null || true
+  git -C "$WT_PATH" config --worktree remote.origin.pushurl \
+    "https://invalid.invalid/push-disabled-by-dispatch" 2>/dev/null \
+    || echo "[dispatch] warning: could not poison pushurl; builder may be able to push" >&2
 fi
+
+# HEAD at dispatch start — used to detect builder self-commits when salvaging a run whose
+# process exited non-zero after completing the work (issue #1).
+HEAD_BEFORE="$(git -C "$DIR_ABS" rev-parse HEAD 2>/dev/null || true)"
 
 emit_cost() {
   local code="$1" end_epoch dur verify_passed row cost_usd in_tok out_tok cache_tok
@@ -149,7 +185,7 @@ emit_cost() {
 run_opencode_fresh() {
   local model="$1"
   # Fresh session seeded with the task prompt file.
-  "${TIMEOUT_PREFIX[@]}" opencode run \
+  "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" opencode run \
     --model "$model" \
     --print-logs --log-level INFO \
     --dir "$DIR" \
@@ -161,7 +197,7 @@ run_opencode_fresh() {
 run_opencode_continue() {
   local model="$1" message="$2"
   # Continue the most recent session in DIR (dispatches run one at a time) with a new message.
-  "${TIMEOUT_PREFIX[@]}" opencode run \
+  "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" opencode run \
     --continue \
     --model "$model" \
     --print-logs --log-level INFO \
@@ -205,14 +241,31 @@ if $READ_ONLY; then
   TREE_BEFORE="$(tree_state)"
 fi
 
+# A builder process exiting non-zero is a weak failure signal once commits exist (issue #1):
+# models often self-commit completed work, then crash on an out-of-scope final step (e.g. a
+# self-directed PR attempt). If the run left new commits and a clean tree, the work is
+# plausibly complete — let the verify loop judge it instead of re-billing the whole task
+# through the fallback (which would re-implement on top of the good commit).
+salvageable_run() {
+  $READ_ONLY && return 1   # a read-only run that committed is a violation, not a salvage
+  local head_now
+  head_now="$(git -C "$DIR_ABS" rev-parse HEAD 2>/dev/null)" || return 1
+  [ -n "$HEAD_BEFORE" ] && [ "$head_now" != "$HEAD_BEFORE" ] || return 1
+  [ -z "$(git -C "$DIR_ABS" status --porcelain 2>/dev/null)" ] || return 1
+  return 0
+}
+
 # --- Initial run (with fallback on infra failure) ---
 run_opencode_fresh "$ACTIVE_MODEL"
 if [ $? -ne 0 ]; then
-  if [ -n "$FALLBACK_MODEL" ]; then
+  if salvageable_run; then
+    echo "[dispatch] $ACTIVE_MODEL exited non-zero but left committed work and a clean tree — skipping fallback; verifying what's there." >&2
+    echo "[dispatch] --- $ACTIVE_MODEL exit salvaged (commits present, tree clean) at $(date) ---" >> "$LOG_FILE"
+  elif [ -n "$FALLBACK_MODEL" ]; then
     echo "[dispatch] Primary model ($ACTIVE_MODEL) failed. Retrying with fallback: $FALLBACK_MODEL" >&2
     echo "[dispatch] --- primary ($ACTIVE_MODEL) infra failure at $(date) ---" >> "$LOG_FILE"
     ACTIVE_MODEL="$FALLBACK_MODEL"
-    run_opencode_fresh "$ACTIVE_MODEL" || finish 1
+    run_opencode_fresh "$ACTIVE_MODEL" || { salvageable_run || finish 1; }
   else
     finish 1
   fi

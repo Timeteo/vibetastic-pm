@@ -136,10 +136,19 @@ bash framework/dispatch.sh --worktree "<branch>" <tasks[n].model> ../<project-na
   checkout — the human's uncommitted work is untouchable and parallel dispatches can't
   collide. `<branch>` is the task's `branch_name` from its notes (Tech Lead tasks), or
   `task/<task-id>` if the task has none. dispatch.sh creates the branch from current HEAD if
-  it doesn't exist, reuses the worktree on a re-dispatch (tier escalation), and prints the
-  path to stderr as `[dispatch] worktree: <path>`. All post-dispatch steps (staged-change
-  check, commit, PR) run **in that worktree path**, not the live checkout; after the PR is
-  opened, remove it: `git -C ../<project-name>/ worktree remove <path>`. Read-only
+  it doesn't exist, reuses the worktree on a re-dispatch (tier escalation) — including when
+  the branch is already checked out under a *different* prompt name, so fixup dispatches onto
+  an open PR branch reuse the existing worktree instead of failing — and prints the
+  path to stderr as `[dispatch] worktree: <path>`. Worktree builders run with gh
+  unauthenticated and the worktree's `remote.origin.pushurl` poisoned (per-worktree config),
+  so they cannot push or open PRs — that stays the PM's job. Push the branch from the **live
+  checkout** (`git -C ../<project-name>/ push origin <branch>`) before `gh pr create`, or
+  first `git -C <worktree> config --worktree --unset remote.origin.pushurl`. Also: a builder
+  that exits non-zero after self-committing completed work (new commits, clean tree) is
+  salvaged — dispatch.sh skips the fallback and sends the committed state to the verifier.
+  All other post-dispatch steps (staged-change check, commit) run **in that worktree path**,
+  not the live checkout; after the PR is opened, remove it:
+  `git -C ../<project-name>/ worktree remove <path>`. Read-only
   review/diagnosis dispatches may target either the worktree (to review its diff) or the
   live checkout, and don't need `--worktree` themselves.
 
