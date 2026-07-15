@@ -316,9 +316,28 @@ print(tid)" "$CODEX_EVENTS.turn" 2>/dev/null || true)"
   [ -n "$tid" ] && CODEX_THREAD_ID="$tid"
 }
 
+# Sandbox stays `workspace-write` (least privilege — no network-home-service widening), plus
+# ONE narrow grant: the git directory as a writable_root. workspace-write blocks writes to the
+# git store (index/refs/objects) — even when .git is inside the workspace — so a builder cannot
+# `git commit` its own work; for a --worktree dispatch it's structurally worse, since the
+# worktree only holds a gitdir *pointer* and the real store is the MAIN repo's .git, entirely
+# outside the sandboxed workspace. Without this, codex produced correct-but-UNCOMMITTED work
+# (observed 2026-07-15, hometastic T086/T087 — the orchestrator committed by hand). Granting the
+# git common dir is sufficient and minimal: verified 2026-07-15 that a *signed* commit then
+# succeeds (SSH signing reads the key FILE — no agent, no network). NOT full-access: codex still
+# can't touch the home dir or reach services, and it doesn't need to — dispatch.sh runs the
+# verify-cmd OUTSIDE the sandbox, so codex never has to run the build/test toolchain itself.
+# `git --git-common-dir` resolves to the main .git for a worktree and to <repo>/.git otherwise;
+# both need the grant. `exec resume` has no `-s` but accepts `-c`, so both paths pass it via -c.
+codex_git_root_arg() {
+  local gc; gc="$(git -C "$DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+  [ -n "$gc" ] && printf -- '-c\nsandbox_workspace_write.writable_roots=["%s"]\n' "$gc"
+}
+
 run_codex_fresh() {
   local spec="$1" args=()
   while IFS= read -r a; do args+=("$a"); done < <(codex_effort_args "$spec")
+  while IFS= read -r a; do args+=("$a"); done < <(codex_git_root_arg)
   "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" codex exec \
     --json -C "$DIR" -s workspace-write --skip-git-repo-check \
     -c sandbox_workspace_write.network_access=true \
@@ -334,6 +353,7 @@ run_codex_continue() {
   local spec="$1" message="$2" args=()
   [ -z "$CODEX_THREAD_ID" ] && { echo "[dispatch] codex: no thread id to resume" >&2; return 1; }
   while IFS= read -r a; do args+=("$a"); done < <(codex_effort_args "$spec")
+  while IFS= read -r a; do args+=("$a"); done < <(codex_git_root_arg)
   # `exec resume` takes no -C/-s and runs in the CALLER's cwd (verified e2e 2026-07-15 —
   # it does NOT restore the thread's original cwd), so cd into the target dir explicitly.
   ( cd "$DIR" && "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" codex exec resume "$CODEX_THREAD_ID" \

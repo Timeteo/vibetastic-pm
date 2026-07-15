@@ -43,7 +43,7 @@ Each backend implements three operations; dispatch.sh keeps its existing contrac
 
 | Op | codex | claude | opencode (today) |
 |---|---|---|---|
-| invoke | `codex exec --json -C <worktree> -s workspace-write -m <model> -c model_reasoning_effort=<e> "$(cat prompt)"` | `claude -p --output-format json` (subscription auth — see invariant) | current `opencode run` |
+| invoke | `codex exec --json -C <worktree> -s workspace-write -c sandbox_workspace_write.writable_roots=["<git-common-dir>"] -m <model> -c model_reasoning_effort=<e> "$(cat prompt)"` | `claude -p --output-format json` (subscription auth — see invariant) | current `opencode run` |
 | continue w/ verifier feedback | `codex exec resume <thread_id> --json "<verifier tail>"` | `claude -p --resume <session_id>` | current session continue |
 | usage record | parse `turn.completed.usage` → cost.jsonl | parse result JSON usage → cost.jsonl | current parsing |
 
@@ -102,8 +102,12 @@ detected set, default order as above.
 
 - Claude backend runs on **subscription auth only** — dispatch guard: refuse to invoke the
   claude backend if `ANTHROPIC_API_KEY` is set in its env.
-- Builders never touch the live checkout (`--worktree` unchanged); codex gets
-  `-s workspace-write -C <worktree>`; push credentials stay stripped.
+- Builders never touch the live checkout (`--worktree` unchanged); codex runs
+  `-s workspace-write -C <worktree>` plus one narrow grant — the git common dir as a
+  `writable_roots` — so it can `git commit` its own work (workspace-write otherwise blocks the
+  git store, which for a worktree lives in the main repo's `.git`). Least-privilege: no network-
+  home-service widening, and codex needn't run the build (dispatch verifies out-of-sandbox).
+  SSH signing works in-sandbox (reads the key file). Push creds stay stripped.
 - VERIFY.md merge gate, Gate 1/Gate 2, plan-lint: unchanged.
 
 ## Implementation order (when approved)
