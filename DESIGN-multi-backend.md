@@ -7,10 +7,10 @@ Implementation notes vs. this design:
   pass on attempt 2; telemetry (incl. reasoning_tokens) lands in cost.jsonl; exit 30 works.
 - **`codex exec resume` gotcha (verified):** it runs in the *caller's* cwd, not the thread's
   original cwd, and accepts no `-C`/`-s` — dispatch.sh cd's into the target dir for resumes.
-- claude backend implemented (`claude -p --output-format json`, `--resume <session_id>`,
-  ANTHROPIC_API_KEY stripped) but **not yet e2e-tested** — the orchestrator session's
-  permission layer blocks spawning `claude -p --dangerously-skip-permissions`; run one
-  supervised dispatch to confirm before relying on it.
+- claude backend e2e-verified 2026-07-15 (user-run — the orchestrator session's permission
+  layer blocks spawning `claude -p --dangerously-skip-permissions` itself): verify-fail →
+  `--resume` feedback → pass on attempt 2, 15s; telemetry in cost.jsonl (cost_usd null,
+  subscription lane). All three backends confirmed.
 
 ## Why
 
