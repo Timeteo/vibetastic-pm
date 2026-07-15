@@ -120,7 +120,11 @@ mode == "preamble" || mode == "notes" || mode == "task" { print }
 ```
 
 Look up `tasks[n].model` and `tasks[n].fallback_model` in PLAN.md, resolved from the task's
-current `tier` (see Tier Escalation below). Read the `Verify command` from `PROJECT.md` — the
+current `tier` **and current `backend`** (see Backend & Tier Escalation below). The backend
+is the first entry of `builder_backends` in `PROJECT.md` (default `codex`) unless the task
+has already cross-backend-escalated; resolve the tier→model mapping from that backend's
+column in `framework/MODELS.md` (codex slugs may carry `@<effort>`; codex/claude backends
+have no fallback model — pass `""`). Read the `Verify command` from `PROJECT.md` — the
 sim-independent command that proves a task didn't break the project (e.g. the Hometastic
 generic/iOS build). If `PROJECT.md` has no `Verify command`, pass an empty verifier and the
 loop degrades to the legacy single-run behavior.
@@ -171,7 +175,8 @@ echoes the last 40 lines so a failure is never silent.
 |------|---------|-----------|
 | `0` | Ran and (if a verifier was set) it passed | Proceed to the staged-change check, then PR Opening |
 | `20` | Code runs but the verifier never passed within the attempt budget | **Tier escalation** (below) — not a `failure_count` event |
-| other non-0 | opencode infra/model failure (even via fallback) | Task failure — see `state.md` (`failure_count +1`) |
+| `30` | Backend unavailable (CLI missing/unauthenticated, or quota exhausted) | **Backend skip** — re-dispatch same tier on the next backend in `builder_backends`; log `backend_skipped`; not a `failure_count` event |
+| other non-0 | builder infra/model failure (even via fallback) | Task failure — see `state.md` (`failure_count +1`) |
 
 **Exit 0 — staged-change check before opening PR** (run in the worktree path dispatch.sh
 printed, not the live checkout):
@@ -187,36 +192,40 @@ git -C <worktree-path> status --short
 
 ---
 
-## Tier Escalation
+## Backend & Tier Escalation (two axes)
 
-The cost lever: start a task at the cheapest reasonable tier and climb only when the verifier
-proves the model couldn't do the job. This finds the lowest tier capable of completing each
-task without you in the loop.
+The cost lever: start on the primary flat-rate backend at the cheapest reasonable tier and
+climb only when the verifier proves the model couldn't do the job. **Flat-rate capacity is
+exhausted before metered tokens** — that is why `builder_backends` defaults to
+`codex → claude → opencode` (see `framework/MODELS.md` → Builder Backends).
 
-**The whole ladder is non-Anthropic (cheap API).** All three tiers are non-Anthropic models
-(see `framework/MODELS.md` → the Anthropic-on-subscription-only invariant). Escalating a tier
-never means "spend API Opus" — it means trying a different cheap model family. The Anthropic
-"big gun" is only ever reached by **leaving the API lane** for the subscription side (Gate 2,
-below).
+**Axis 1 — tier, within the current backend.** Ladder: `fast` → `standard` → `heavy`.
 
-**Ladder (from `framework/MODELS.md`):** `fast` → `standard` → `heavy`.
+- A task's **starting tier** is the Tech Lead / Architect `suggested_tier`; bias toward
+  `fast` — escalation is the safety net.
+- On dispatch.sh **exit 20** below `heavy`: bump `tier`, re-resolve `model` (+`fallback_model`,
+  opencode only) from the current backend's column in `framework/MODELS.md`, append
+  `tier_escalated` (from→to tier, verifier tail), re-dispatch. No `failure_count` change.
+- On codex, tier rungs are model-size steps (luna → terra → sol@low); exit 20 at `heavy`
+  gets one effort bump (sol@low → sol@medium) before the backend counts as exhausted.
+  Efforts above medium are never auto-dispatched (weekly-cliff guard — Gate 2 only).
 
-- A task's **starting tier** is the Tech Lead / Architect `suggested_tier`. To bias harder for
-  cost savings, lower starting tiers toward `fast`; escalation is the safety net either way.
-- On dispatch.sh **exit 20** (verifier exhausted):
-  1. If the task's current `tier` is below `heavy`: bump `tier` to the next rung, re-resolve
-     `model` + `fallback_model` from `framework/MODELS.md`, append `tier_escalated` to TASK_LOG
-     (record from→to tier and the verifier tail), and **re-dispatch**. Do **not** increment
-     `failure_count` — escalation is expected, not a failure.
-  2. If the task is already at `heavy`: the non-Anthropic ladder is exhausted — **control now
-     returns to the subscription side**, never to API Opus. Increment `failure_count`, write the
-     verifier output to `error`, and follow `state.md` Failure Handling → Gate 2: the Tech Lead
-     (subscription Sonnet, escalating to subscription Opus for genuinely architectural cases)
-     re-specs or fixes the task on the Agent tool, then it re-enters the ladder at `fast`. This
-     is the "offload cheap; when it can't, the subscription handles it" boundary — the Anthropic
-     work is covered by the plan, not billed per-token through OpenRouter.
-- Cap escalations at one pass up the ladder per task (fast→standard→heavy). Re-dispatch at the
-  same tier is not retried automatically except via the normal `failure_count` path.
+**Axis 2 — backend, when the current backend's ladder is exhausted or unavailable.**
+
+- Exit 20 at `heavy` (post effort-bump on codex): move to the **next backend** in
+  `builder_backends`, re-enter at `standard`, append `backend_escalated` (from→to backend,
+  verifier tail). No `failure_count` change.
+- Exit **30** (backend unavailable — CLI missing, auth failure, quota exhausted): skip to
+  the next backend at the **same tier**, append `backend_skipped`. No `failure_count` change.
+- All backends exhausted: increment `failure_count`, write the verifier output to `error`,
+  and follow `state.md` Failure Handling → Gate 2: the Tech Lead (subscription Sonnet,
+  escalating to subscription Opus for genuinely architectural cases) re-specs or fixes the
+  task on the Agent tool, then it re-enters at the first backend, tier `fast`. Anthropic
+  API billing never enters the picture: the claude *backend* runs on subscription auth
+  (dispatch.sh strips `ANTHROPIC_API_KEY`), and API Opus is never a rung.
+
+Cap: one pass up each axis per task. Re-dispatch at the same tier+backend is not retried
+automatically except via the normal `failure_count` path.
 
 ---
 

@@ -2,7 +2,14 @@
 # PM dispatch wrapper — called by PM orchestrator to avoid shell substitution in Claude Code permission checks.
 #
 # Usage:
-#   bash dispatch.sh [--read-only] [--worktree <branch>] <model> <project-dir> <prompt-file> [fallback-model] [verify-cmd] [max-attempts] [tier]
+#   bash dispatch.sh [--read-only] [--worktree <branch>] [--backend <codex|claude|opencode>] \
+#     <model> <project-dir> <prompt-file> [fallback-model] [verify-cmd] [max-attempts] [tier]
+#
+# --backend: which builder CLI runs the task. Default is inferred from the model slug:
+#   gpt-* → codex; claude-*/sonnet/opus/haiku → claude; anything else (openrouter/*) → opencode.
+#   codex model slugs may carry a reasoning effort suffix: `gpt-5.6-sol@low` (default: the
+#   model's own default effort). The claude backend always runs on subscription auth —
+#   ANTHROPIC_API_KEY is stripped from its environment (MODELS.md hard invariant).
 #
 # --read-only: for diagnosis/review dispatches (RULES.md lesson 2, VERIFY.md diff review).
 #   The model is expected to investigate and report, changing nothing. Enforced structurally:
@@ -38,10 +45,12 @@
 # committed state goes straight to the verifier.
 #
 # Exit codes (the PM branches on these):
-#   0   success — opencode ran and, if a verifier was given, it passed
-#   1   opencode infra/model failure — could not produce a run even via the fallback model
+#   0   success — the builder ran and, if a verifier was given, it passed
+#   1   builder infra/model failure — could not produce a run even via the fallback model
 #   20  verify never passed within max-attempts — code runs but is wrong -> PM escalates tier
 #   21  --read-only violated — the run modified the target tree (changes left for inspection)
+#   30  backend unavailable — CLI not installed/authenticated; PM skips to the next backend
+#       in PROJECT.md builder_backends (no failure_count increment)
 #
 # Output capture: opencode assistant output stays on stdout. Full opencode + verifier logs
 # go to a per-run logfile under logs/. On any non-zero exit the log tail is echoed to stderr
@@ -50,10 +59,12 @@ eval "$(~/.ssh/gh-agent-token.sh)"
 
 READ_ONLY=false
 WORKTREE_BRANCH=""
+BACKEND=""
 while true; do
   case "$1" in
     --read-only) READ_ONLY=true; shift ;;
     --worktree)  WORKTREE_BRANCH="$2"; shift 2 ;;
+    --backend)   BACKEND="$2"; shift 2 ;;
     *) break ;;
   esac
 done
@@ -65,6 +76,28 @@ FALLBACK_MODEL="${4:-}"
 VERIFY_CMD="${5:-}"
 MAX_ATTEMPTS="${6:-3}"
 TIER="${7:-}"   # optional: task tier (fast|standard|heavy), recorded in cost telemetry only
+
+# --- Backend selection (codex | claude | opencode) ---
+infer_backend() {
+  case "$1" in
+    gpt-*|codex-*)                       echo codex ;;
+    claude-*|sonnet|opus|haiku|fable)    echo claude ;;
+    *)                                   echo opencode ;;
+  esac
+}
+[ -z "$BACKEND" ] && BACKEND="$(infer_backend "$MODEL")"
+case "$BACKEND" in codex|claude|opencode) ;; *)
+  echo "[dispatch] unknown backend: $BACKEND" >&2; exit 1 ;;
+esac
+if ! command -v "$([ "$BACKEND" = opencode ] && echo opencode || echo "$BACKEND")" >/dev/null 2>&1; then
+  echo "[dispatch] backend unavailable: $BACKEND CLI not on PATH" >&2
+  exit 30
+fi
+
+# codex model slugs may carry an effort suffix (gpt-5.6-sol@low) — parsed per call so the
+# fallback model can carry its own effort.
+model_of()  { echo "${1%%@*}"; }
+effort_of() { case "$1" in *@*) echo "${1##*@}" ;; *) echo "" ;; esac; }
 
 # Logs anchor to the PM directory, not the caller's cwd: the task prompt always lives in
 # <pm-dir>/prompts/, so default LOG_DIR to the prompts dir's sibling logs/. This keeps
@@ -155,7 +188,7 @@ fi
 HEAD_BEFORE="$(git -C "$DIR_ABS" rev-parse HEAD 2>/dev/null || true)"
 
 emit_cost() {
-  local code="$1" end_epoch dur verify_passed row cost_usd in_tok out_tok cache_tok
+  local code="$1" end_epoch dur verify_passed row cost_usd in_tok out_tok cache_tok reason_tok
   end_epoch="$(date +%s)"
   dur=$(( end_epoch - START_EPOCH ))
   if [ -z "$VERIFY_CMD" ]; then
@@ -165,20 +198,59 @@ emit_cost() {
   else
     verify_passed=false
   fi
-  cost_usd=null; in_tok=null; out_tok=null; cache_tok=null
-  if command -v sqlite3 >/dev/null 2>&1 && [ -r "$OPENCODE_DB" ]; then
-    row="$(sqlite3 -separator '|' "$OPENCODE_DB" \
-      "select round(coalesce(sum(cost),0),6), coalesce(sum(tokens_input),0), coalesce(sum(tokens_output+tokens_reasoning),0), coalesce(sum(tokens_cache_read),0) \
-       from session where directory='${DIR_ABS//\'/\'\'}' and time_created >= ${START_EPOCH}000;" 2>/dev/null)"
-    if [ -n "$row" ]; then
-      IFS='|' read -r cost_usd in_tok out_tok cache_tok <<< "$row"
-    fi
-  fi
-  printf '{"ts":"%s","role":"opencode","prompt":"%s","model":"%s","tier":%s,"attempts":%s,"verify_passed":%s,"exit":%s,"duration_s":%s,"cost_usd":%s,"input_tokens":%s,"output_tokens":%s,"cache_read_tokens":%s,"log":"%s"}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(basename "$PROMPT_FILE")" "$ACTIVE_MODEL" \
+  cost_usd=null; in_tok=null; out_tok=null; cache_tok=null; reason_tok=null
+  case "$BACKEND" in
+    opencode)
+      if command -v sqlite3 >/dev/null 2>&1 && [ -r "$OPENCODE_DB" ]; then
+        row="$(sqlite3 -separator '|' "$OPENCODE_DB" \
+          "select round(coalesce(sum(cost),0),6), coalesce(sum(tokens_input),0), coalesce(sum(tokens_output+tokens_reasoning),0), coalesce(sum(tokens_cache_read),0) \
+           from session where directory='${DIR_ABS//\'/\'\'}' and time_created >= ${START_EPOCH}000;" 2>/dev/null)"
+        if [ -n "$row" ]; then
+          IFS='|' read -r cost_usd in_tok out_tok cache_tok <<< "$row"
+        fi
+      fi ;;
+    codex)
+      # Sum turn.completed usage across the fresh run and every resume turn. Subscription
+      # lane: cost_usd stays null; tokens are the weekly-quota burn proxy (see MODELS.md).
+      if [ -r "$CODEX_EVENTS" ]; then
+        row="$(python3 -c "
+import json,sys
+i=o=c=r=0
+for l in open(sys.argv[1]):
+    try: e=json.loads(l)
+    except Exception: continue
+    if e.get('type')=='turn.completed':
+        u=e.get('usage',{})
+        i+=u.get('input_tokens',0); o+=u.get('output_tokens',0)
+        c+=u.get('cached_input_tokens',0); r+=u.get('reasoning_output_tokens',0)
+print(f'{i}|{o}|{c}|{r}')" "$CODEX_EVENTS" 2>/dev/null)"
+        [ -n "$row" ] && IFS='|' read -r in_tok out_tok cache_tok reason_tok <<< "$row"
+      fi ;;
+    claude)
+      # Subscription lane: sum usage from each result JSON; cost_usd stays null.
+      if [ -r "$CLAUDE_RESULTS" ]; then
+        row="$(python3 -c "
+import json,sys
+d=json.JSONDecoder(); s=open(sys.argv[1]).read(); i=o=c=0; pos=0
+while pos < len(s):
+    s2=s[pos:].lstrip()
+    if not s2: break
+    pos=len(s)-len(s2)
+    try: obj,end=d.raw_decode(s,pos)
+    except Exception: break
+    pos=end
+    u=obj.get('usage',{}) if isinstance(obj,dict) else {}
+    i+=u.get('input_tokens',0); o+=u.get('output_tokens',0)
+    c+=u.get('cache_read_input_tokens',0)
+print(f'{i}|{o}|{c}')" "$CLAUDE_RESULTS" 2>/dev/null)"
+        [ -n "$row" ] && IFS='|' read -r in_tok out_tok cache_tok <<< "$row"
+      fi ;;
+  esac
+  printf '{"ts":"%s","role":"opencode","backend":"%s","prompt":"%s","model":"%s","tier":%s,"attempts":%s,"verify_passed":%s,"exit":%s,"duration_s":%s,"cost_usd":%s,"input_tokens":%s,"output_tokens":%s,"cache_read_tokens":%s,"reasoning_tokens":%s,"log":"%s"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$BACKEND" "$(basename "$PROMPT_FILE")" "$ACTIVE_MODEL" \
     "$([ -n "$TIER" ] && printf '"%s"' "$TIER" || echo null)" \
     "${ATTEMPTS_USED:-1}" "$verify_passed" "$code" "$dur" \
-    "${cost_usd:-null}" "${in_tok:-null}" "${out_tok:-null}" "${cache_tok:-null}" \
+    "${cost_usd:-null}" "${in_tok:-null}" "${out_tok:-null}" "${cache_tok:-null}" "${reason_tok:-null}" \
     "$(basename "$LOG_FILE")" >> "${LOG_DIR}/cost.jsonl" 2>/dev/null || true
 }
 
@@ -206,6 +278,127 @@ run_opencode_continue() {
     "$message" \
     2>> "$LOG_FILE"
 }
+
+# --- codex backend ---
+# JSONL events accumulate in $CODEX_EVENTS across the fresh run and every resume turn;
+# emit_cost sums all turn.completed usage records. thread.started supplies the thread id
+# used by `codex exec resume` for the verify feedback loop.
+CODEX_EVENTS="${LOG_FILE%.log}.codex-events.jsonl"
+CODEX_THREAD_ID=""
+
+codex_effort_args() {
+  local eff; eff="$(effort_of "$1")"
+  [ -n "$eff" ] && printf -- '-c\nmodel_reasoning_effort=%s\n' "$eff"
+}
+
+codex_postrun() {
+  # Append events to the main log, capture the thread id, echo the last agent message to
+  # stdout so the PM sees the builder's report like it does with opencode.
+  cat "$CODEX_EVENTS.turn" >> "$CODEX_EVENTS" 2>/dev/null
+  cat "$CODEX_EVENTS.turn" >> "$LOG_FILE" 2>/dev/null
+  # Builder's report goes to stdout (like opencode's assistant output).
+  python3 -c "
+import json,sys
+for l in open(sys.argv[1]):
+    try: e=json.loads(l)
+    except Exception: continue
+    if e.get('type')=='item.completed' and e.get('item',{}).get('type')=='agent_message':
+        print(e['item'].get('text',''))" "$CODEX_EVENTS.turn" 2>/dev/null || true
+  local tid
+  tid="$(python3 -c "
+import json,sys
+tid=''
+for l in open(sys.argv[1]):
+    try: e=json.loads(l)
+    except Exception: continue
+    if e.get('type')=='thread.started': tid=e.get('thread_id','')
+print(tid)" "$CODEX_EVENTS.turn" 2>/dev/null || true)"
+  [ -n "$tid" ] && CODEX_THREAD_ID="$tid"
+}
+
+run_codex_fresh() {
+  local spec="$1" args=()
+  while IFS= read -r a; do args+=("$a"); done < <(codex_effort_args "$spec")
+  "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" codex exec \
+    --json -C "$DIR" -s workspace-write --skip-git-repo-check \
+    -c sandbox_workspace_write.network_access=true \
+    -m "$(model_of "$spec")" "${args[@]}" \
+    "$(cat "$PROMPT_FILE")" \
+    > "$CODEX_EVENTS.turn" 2>> "$LOG_FILE"
+  local ec=$?
+  codex_postrun
+  return $ec
+}
+
+run_codex_continue() {
+  local spec="$1" message="$2" args=()
+  [ -z "$CODEX_THREAD_ID" ] && { echo "[dispatch] codex: no thread id to resume" >&2; return 1; }
+  while IFS= read -r a; do args+=("$a"); done < <(codex_effort_args "$spec")
+  # `exec resume` takes no -C/-s and runs in the CALLER's cwd (verified e2e 2026-07-15 —
+  # it does NOT restore the thread's original cwd), so cd into the target dir explicitly.
+  ( cd "$DIR" && "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" codex exec resume "$CODEX_THREAD_ID" \
+      --json --skip-git-repo-check \
+      -c sandbox_workspace_write.network_access=true \
+      -m "$(model_of "$spec")" "${args[@]}" \
+      "$message" ) \
+    > "$CODEX_EVENTS.turn" 2>> "$LOG_FILE"
+  local ec=$?
+  codex_postrun
+  return $ec
+}
+
+# --- claude backend (subscription auth only — ANTHROPIC_API_KEY stripped) ---
+# Result JSON (usage, session_id, total_cost_usd) accumulates in $CLAUDE_RESULTS; the
+# session id feeds `claude -p --resume` for the verify feedback loop.
+CLAUDE_RESULTS="${LOG_FILE%.log}.claude-results.jsonl"
+CLAUDE_SESSION_ID=""
+
+claude_postrun() {
+  cat "$CLAUDE_RESULTS.turn" >> "$CLAUDE_RESULTS" 2>/dev/null
+  cat "$CLAUDE_RESULTS.turn" >> "$LOG_FILE" 2>/dev/null
+  python3 -c "
+import json,sys
+try: r=json.load(open(sys.argv[1]))
+except Exception: sys.exit()
+print(r.get('result',''))" "$CLAUDE_RESULTS.turn" 2>/dev/null || true
+  local sid
+  sid="$(python3 -c "
+import json,sys
+try: r=json.load(open(sys.argv[1]))
+except Exception: sys.exit()
+print(r.get('session_id',''))" "$CLAUDE_RESULTS.turn" 2>/dev/null || true)"
+  [ -n "$sid" ] && CLAUDE_SESSION_ID="$sid"
+}
+
+run_claude_fresh() {
+  local spec="$1"
+  ( cd "$DIR" && "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" env -u ANTHROPIC_API_KEY claude \
+      -p --output-format json \
+      --model "$(model_of "$spec")" \
+      --dangerously-skip-permissions \
+      "$(cat "$PROMPT_FILE")" ) \
+    > "$CLAUDE_RESULTS.turn" 2>> "$LOG_FILE"
+  local ec=$?
+  claude_postrun
+  return $ec
+}
+
+run_claude_continue() {
+  local spec="$1" message="$2"
+  [ -z "$CLAUDE_SESSION_ID" ] && { echo "[dispatch] claude: no session id to resume" >&2; return 1; }
+  ( cd "$DIR" && "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" env -u ANTHROPIC_API_KEY claude \
+      -p --output-format json --resume "$CLAUDE_SESSION_ID" \
+      --model "$(model_of "$spec")" \
+      --dangerously-skip-permissions \
+      "$message" ) \
+    > "$CLAUDE_RESULTS.turn" 2>> "$LOG_FILE"
+  local ec=$?
+  claude_postrun
+  return $ec
+}
+
+run_builder_fresh()    { "run_${BACKEND}_fresh" "$@"; }
+run_builder_continue() { "run_${BACKEND}_continue" "$@"; }
 
 run_verify() {
   # Run the verifier in the target dir; tee combined output to the logfile. Returns its exit.
@@ -256,7 +449,7 @@ salvageable_run() {
 }
 
 # --- Initial run (with fallback on infra failure) ---
-run_opencode_fresh "$ACTIVE_MODEL"
+run_builder_fresh "$ACTIVE_MODEL"
 if [ $? -ne 0 ]; then
   if salvageable_run; then
     echo "[dispatch] $ACTIVE_MODEL exited non-zero but left committed work and a clean tree — skipping fallback; verifying what's there." >&2
@@ -265,7 +458,7 @@ if [ $? -ne 0 ]; then
     echo "[dispatch] Primary model ($ACTIVE_MODEL) failed. Retrying with fallback: $FALLBACK_MODEL" >&2
     echo "[dispatch] --- primary ($ACTIVE_MODEL) infra failure at $(date) ---" >> "$LOG_FILE"
     ACTIVE_MODEL="$FALLBACK_MODEL"
-    run_opencode_fresh "$ACTIVE_MODEL" || { salvageable_run || finish 1; }
+    run_builder_fresh "$ACTIVE_MODEL" || { salvageable_run || finish 1; }
   else
     finish 1
   fi
@@ -304,6 +497,6 @@ while true; do
   FEEDBACK="$(printf 'The verification command failed. Fix the code so it passes, then stop.\n\nCommand:\n%s\n\nOutput (tail):\n%s\n' \
     "$VERIFY_CMD" "$(tail -c 8000 "$LOG_DIR/.verify.out")")"
 
-  run_opencode_continue "$ACTIVE_MODEL" "$FEEDBACK" || finish 1
+  run_builder_continue "$ACTIVE_MODEL" "$FEEDBACK" || finish 1
   attempt=$((attempt + 1))
 done

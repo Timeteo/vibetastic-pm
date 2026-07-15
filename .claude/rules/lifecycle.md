@@ -34,12 +34,17 @@ Ask the user (one message):
   (sim-independent for iOS)? This becomes the per-task gate for the self-correction loop. If
   unknown, leave blank — the loop degrades to a single run with no auto-correction.
 
+Then detect installed builder CLIs (`command -v codex claude opencode`) and propose the
+backend order — default `codex, claude, opencode`, filtered to what's installed. The user
+can reorder or drop backends.
+
 Write `PROJECT.md`:
 
 ```markdown
 ---
 project: <project-name>
 setup_at: <ISO8601>
+builder_backends: [<detected order, e.g. codex, claude, opencode>]
 ---
 
 ## Project Paths
@@ -100,10 +105,11 @@ Only after SPEC `status: approved`.
    - **Stage 2 — Architecture**: one Architect task → `prompts/build-spec.md`
    - **Stage 3 — Implementation**: one or more OpenCode tasks, each a single coherent invocation
 3. Declare explicit `depends_on` for every task. Check for cycles before writing.
-4. For each OpenCode task, set `tier` to the assigned starting tier (the suggested tier, or
-   lower toward `fast` to bias for cost — see Tier Escalation in `dispatch.md`), then read the
-   `model` and `fallback` columns from `framework/MODELS.md` for that tier and write them to the
-   task as `model` and `fallback_model`. The PM re-resolves these on escalation.
+4. For each build task, set `backend` to the first entry of `builder_backends` in
+   `PROJECT.md` and `tier` to the assigned starting tier (the suggested tier, or lower toward
+   `fast` to bias for cost — see Backend & Tier Escalation in `dispatch.md`), then resolve
+   `model` (and `fallback_model` — opencode backend only, else empty) from that backend's
+   column in `framework/MODELS.md`. The PM re-resolves these on escalation.
 5. Write `PLAN.md` with all tasks at `status: pending`, `failure_count: 0`.
 5. Append `plan_generated` to TASK_LOG.
 6. Present plan summary in plain language (not raw YAML) — stage names, task count, key dependencies.

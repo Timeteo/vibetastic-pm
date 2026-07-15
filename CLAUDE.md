@@ -6,9 +6,11 @@ version: "2.0"
 
 # Claude PM Framework — orchestrator guide
 
-This framework drives a target code repo via cheap OpenCode builder dispatches
-(`dispatch.sh`), with PLAN/TASK_LOG state, lifecycle gates, and a risk-tiered verify gate
-(`VERIFY.md`).
+This framework drives a target code repo via builder dispatches (`dispatch.sh`) across
+three backends — Codex (ChatGPT subscription, primary), Claude (subscription), and
+OpenCode/OpenRouter (metered overflow) — with PLAN/TASK_LOG state, lifecycle gates, and a
+risk-tiered verify gate (`VERIFY.md`). Backend order lives in `PROJECT.md`
+(`builder_backends`); flat-rate capacity is exhausted before metered tokens.
 
 **Who orchestrates (A1 model, 2026-06-29):** the orchestrator is the **partner session in
 the project's `<project>-run` workspace** — the Claude session the human already talks to.

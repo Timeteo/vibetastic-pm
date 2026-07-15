@@ -57,7 +57,7 @@ if os.path.exists(cost_jsonl):
         if not line: continue
         try: r = json.loads(line)
         except json.JSONDecodeError: continue
-        a = agg[r.get("model","?")]
+        a = agg[f"{r.get('backend','opencode')}: {r.get('model','?')}"]
         a["role"] = r.get("role","opencode")
         a["runs"] += 1
         a["attempts"] += r.get("attempts",1) or 1
@@ -83,25 +83,60 @@ def est(model, tin, tout):
     if not p or (tin == 0 and tout == 0): return None
     return tin/1e6*p[0] + tout/1e6*p[1]
 
-print("=== OpenCode dispatches (from logs/cost.jsonl) ===")
+# --- Weekly burn proxy for subscription backends (codex weekly cap; claude 5h windows) ---
+# Codex exposes no in-band quota figure: tokens (esp. reasoning) are a PROXY for weekly-cap
+# burn. Reconcile against the ChatGPT usage UI — this report paces, it is not authoritative.
+weekly = defaultdict(lambda: {"runs":0,"in":0,"out":0,"reason":0,"cache":0})
+if os.path.exists(cost_jsonl):
+    import datetime
+    for line in open(cost_jsonl):
+        line = line.strip()
+        if not line: continue
+        try: r = json.loads(line)
+        except json.JSONDecodeError: continue
+        be = r.get("backend")
+        if be not in ("codex", "claude"): continue
+        try:
+            wk = datetime.datetime.fromisoformat(r["ts"].replace("Z","+00:00")).strftime("%G-W%V")
+        except Exception:
+            wk = "?"
+        w = weekly[(be, wk)]
+        w["runs"] += 1
+        for k, f in (("in","input_tokens"),("out","output_tokens"),
+                     ("reason","reasoning_tokens"),("cache","cache_read_tokens")):
+            if isinstance(r.get(f), int): w[k] += r[f]
+
+print("=== Subscription-backend weekly burn (PROXY — reconcile vs provider usage UI) ===")
+if not weekly:
+    print("  (no codex/claude dispatch records yet)")
+for (be, wk), w in sorted(weekly.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+    print(f"  {wk}  {be:7s} runs={w['runs']}  in={w['in']:,}  out={w['out']:,}  "
+          f"reasoning={w['reason']:,}  cache={w['cache']:,}")
+print()
+
+print("=== Builder dispatches (from logs/cost.jsonl) ===")
 if not agg:
     print("  (no records yet)")
 total = 0.0
 for model, a in sorted(agg.items()):
+    # Subscription backends (codex/claude) have no per-token spend — don't fake a $ figure.
+    if model.startswith(("codex: ", "claude: ")):
+        d, dollar = None, "(subscription — see weekly burn)"
     # Prefer the actual billed cost (recorded from opencode's session store) over a
     # price-table estimate; estimate only fills in for records that predate cost_usd.
-    if a["costed"] == a["runs"] and a["runs"] > 0:
+    elif a["costed"] == a["runs"] and a["runs"] > 0:
         d, src = a["cost"], "actual"
+        dollar = f"${d:,.4f} ({src})"
     else:
-        e = est(model, a["in"], a["out"])
+        e = est(model.split(": ", 1)[-1], a["in"], a["out"])
         d, src = ((a["cost"] + (e or 0)) or None), "actual+est" if a["costed"] else "est"
-    dollar = f"${d:,.4f} ({src})" if d is not None else "(tokens/price n/a)"
+        dollar = f"${d:,.4f} ({src})" if d is not None else "(tokens/price n/a)"
     if d: total += d
     print(f"  {model}")
     print(f"     runs={a['runs']}  verify-fails={a['fails']}  attempts={a['attempts']}  "
           f"wall={a['dur']}s  in={a['in']:,}  out={a['out']:,}  cache={a['cache']:,}  {dollar}")
 if total:
-    print(f"  ── OpenCode total: ${total:,.4f}")
+    print(f"  ── Metered (OpenRouter) total: ${total:,.4f}")
 
 print("\n=== Planning / PM agent spawns (from TASK_LOG cost_event) ===")
 if not plan:

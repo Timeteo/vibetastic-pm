@@ -46,6 +46,53 @@ To escalate a role for one spawn (e.g. a genuinely architectural Tech Lead pass)
 
 ---
 
+## Builder Backends (2026-07-15)
+
+Build tasks dispatch through one of three backends, in the project's `builder_backends`
+preference order from `PROJECT.md` (default: `codex → claude → opencode`). Rationale:
+**exhaust flat-rate subscription capacity before spending metered tokens.**
+
+| Backend | CLI | Billing | Limits | Role |
+|---------|-----|---------|--------|------|
+| `codex` | `codex exec` | ChatGPT subscription | **weekly** window only | Primary builder lane |
+| `claude` | `claude -p` | Claude subscription | 5-hour windows | Second flat pool |
+| `opencode` | `opencode run` | OpenRouter per-token | none | Always-available overflow; wide parallel fan-out |
+
+dispatch.sh selects the backend from the model slug (or `--backend`); exit 30 = backend
+unavailable → the PM skips to the next backend in order without a `failure_count` event.
+
+### Codex tier column
+
+The gpt-5.6 family is a size ladder — Sol (frontier), Terra (balanced), Luna (fast/cheap)
+— a direct Opus/Sonnet/Haiku analog. Reasoning effort rides on the slug as `@<effort>`
+(`gpt-5.6-sol@low`); omitted = the model's default. Escalation climbs **model first,
+effort second**.
+
+| Tier | Codex model | Notes |
+|------|-------------|-------|
+| `fast` | `gpt-5.6-luna` | default effort (medium) |
+| `standard` | `gpt-5.6-terra` | default effort (medium) |
+| `heavy` | `gpt-5.6-sol@low` | sol's default is low ("highly capable at lower efforts"); one retry bump to `gpt-5.6-sol@medium` counts as the heavy rung's second attempt |
+
+`high`/`xhigh`/`max`/`ultra` efforts and prior-gen models (gpt-5.5/5.4/5.4-mini — dominated
+by the 5.6 ladder) are **not** auto-dispatched; sol above medium is a Gate 2 user decision
+(the weekly-cliff guard). Codex fallback column is empty — backend order *is* the fallback.
+
+### Claude tier column (subscription auth only)
+
+`fast`/`standard` → `sonnet`, `heavy` → `opus`. dispatch.sh strips `ANTHROPIC_API_KEY`
+from the claude backend's environment so this lane can never silently bill per-token
+(the Anthropic-on-subscription-only invariant, enforced structurally).
+
+### Weekly-quota burn proxy (codex)
+
+Codex exposes **no in-band weekly-quota figure** (probed v0.144.4). dispatch.sh records
+per-run tokens — including `reasoning_tokens`, the fastest quota-eater — into
+`logs/cost.jsonl`; `cost-report.sh` rolls them up per ISO-week as a **burn proxy**.
+The proxy paces; the ChatGPT usage UI is the authority — reconcile periodically.
+
+---
+
 ## OpenCode Tiers
 
 The Tech Lead recommends a tier (`fast` / `standard` / `heavy`) in its output metadata.
@@ -128,6 +175,7 @@ offload lane). Context/prices verified on OpenRouter 2026-06-29.
 | `openrouter/deepseek/deepseek-v4-pro` | 0.43 | 0.87 | 1M | **standard** primary; fast/heavy fallback — cheapest, top SWE-bench |
 | `openrouter/z-ai/glm-5.2` | 0.95 | 3.00 | 1M | **heavy** primary; standard fallback (~Opus-4.8 FrontierSWE) |
 | `openrouter/qwen/qwen3-coder-flash` | 0.195 | 0.975 | 1M | **fast** primary — non-reasoning coder specialist (e2e confirmed 2026-07-02) |
+| `gpt-5.6-sol` / `-terra` / `-luna` | — | — | — | Codex backend, ChatGPT subscription — no per-token spend; tracked as weekly-quota burn proxy (tokens in cost.jsonl) |
 | `openrouter/google/gemini-3-flash-preview` | 0.50 | 3.00 | 1M | Dropped 2026-07-02 (priced above deepseek; latency-only advantage) |
 | `openrouter/google/gemini-3.5-flash` | 1.50 | 9.00 | 1M | Dropped (reasoning-stall on big tasks); kept for reference |
 

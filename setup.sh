@@ -84,10 +84,19 @@ EOF
 echo "✓ Wrote .claude/settings.json"
 
 # Write PROJECT.md
+# Builder backend order: flat-rate subscriptions first, metered OpenRouter overflow last
+# (MODELS.md → Builder Backends). Filtered to CLIs actually installed on this machine.
+BACKENDS=""
+for be in codex claude opencode; do
+  command -v "$be" >/dev/null 2>&1 && BACKENDS="${BACKENDS:+$BACKENDS, }$be"
+done
+BACKENDS="${BACKENDS:-opencode}"
+
 cat > PROJECT.md <<EOF
 ---
 project: ${PROJECT_NAME}
 setup_at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+builder_backends: [${BACKENDS}]
 ---
 
 ## Project Paths

@@ -59,11 +59,13 @@ Never batch multiple task updates into one write. Each task result gets its own 
 
 ## Failure Handling
 
-First distinguish **tier escalation** from a true failure. dispatch.sh **exit 20** means the
-code runs but the verifier never passed within its attempt budget — this is *not* a failure:
-follow Tier Escalation in `dispatch.md` (bump tier, log `tier_escalated`, re-dispatch, do **not**
-touch `failure_count`). Only when a task is already at the `heavy` tier and still exits 20, or
-opencode returns any other non-zero exit (infra/model failure), is it a true failure.
+First distinguish **escalation** from a true failure. dispatch.sh **exit 20** (verifier never
+passed) and **exit 30** (backend unavailable) are *not* failures: follow Backend & Tier
+Escalation in `dispatch.md` (bump tier within the backend, then move to the next backend in
+`builder_backends`; log `tier_escalated` / `backend_escalated` / `backend_skipped`;
+never touch `failure_count`). Only when the **last** backend's ladder is exhausted (exit 20
+at `heavy` on the final backend), or the builder returns any other non-zero exit
+(infra/model failure), is it a true failure.
 
 On a true task failure (agent error, malformed output, opencode infra failure, or heavy-tier
 verifier exhaustion):
@@ -84,8 +86,10 @@ Because dispatch.sh now self-corrects against the verifier and the PM escalates 
 automatically, Gate 2 should fire rarely — only when even the `heavy` tier can't make the
 verifier pass, or on repeated infra failures.
 
-**Escalation log event** — `tier_escalated`, fields: `from_tier`, `to_tier`, `verifier_tail`,
-`new_model`, `new_fallback_model`.
+**Escalation log events** —
+`tier_escalated`: `from_tier`, `to_tier`, `verifier_tail`, `new_model`, `new_fallback_model`.
+`backend_escalated`: `from_backend`, `to_backend`, `verifier_tail`, `new_model`.
+`backend_skipped`: `backend`, `to_backend`, `reason` (exit-30 stderr tail).
 
 ---
 
