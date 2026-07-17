@@ -10,7 +10,10 @@
 > `claude` in the `-pm/` directory. **Also historical: Gate 3.** Stage transitions no longer
 > wait for "proceed" — they auto-advance with a posted summary (RULES.md Gate 3). Every
 > "type proceed" below is the old behavior. Model names in examples (Gemini Flash, Opus
-> Designer) are historical too — `framework/MODELS.md` is the source of truth.
+> Designer) are historical too — `framework/MODELS.md` is the source of truth. **Newer
+> mechanics** (reviewer family diversity, `security` flag, codex burn-gated `sol@high`,
+> Opus/Fable orchestrator guidance, write-through state + `HANDOFF.md`/`checkpoint`,
+> `PROPOSALS.md`) are collected in **§14** and are not reflected in the older sections.
 
 ## TL;DR
 
@@ -341,6 +344,65 @@ One interrupted run counts as one failure. If the task was already at `failure_c
 
 ---
 
+## 14. Newer Framework Behaviors (2026-07-17)
+
+These post-date the historical flow above and change how the orchestrator reviews, escalates,
+and hands off. They are live in the current framework; `RULES.md`, `VERIFY.md`, and `MODELS.md`
+are the authority.
+
+**Reviewer family diversity (merge gate).** The first-pass Reviewer must be a *different model
+family* than the builder backend that produced the diff — same-family review reproduces the
+builder's blind spots. Concretely: a diff built by the **claude** backend (sonnet/opus) is
+reviewed by the opencode `standard` tier (deepseek), **never** the Sonnet subagent; diffs from
+`codex` or `opencode` may use either reviewer. See `VERIFY.md` § Diff review.
+
+**Security-sensitive tasks.** The Tech Lead (and Architect, for Stage-2 tasks) sets a
+`security: true` flag when a diff touches auth, credentials, keychain, entitlements, network
+trust, sandboxing, or input validation on external data. It rides in the task's result YAML
+and lands on the PLAN.md task next to `verify_tier`. Effect: the review rung is forced up —
+first-pass review runs on **Sonnet minimum** (not the cheap opencode tier) and adjudication is
+**mandatory Opus, never delegated, never Fable**. This is the one place the cheap-first bias is
+wrong: a missed security bug ships silently rather than failing a verify loop. See `VERIFY.md`
+§ Security-sensitive tasks.
+
+**Codex burn-gated `sol@high` rung.** To preserve the scarcer Claude subscription window, the
+codex heavy ladder now extends one rung: after `gpt-5.6-sol@medium` fails, dispatch attempts
+`gpt-5.6-sol@high` **once** before falling through to the claude backend — but only if the
+current ISO-week burn proxy (`logs/cost.jsonl`) is below `codex_weekly_burn_threshold`
+(tunable in `MODELS.md`, conservative default). At/above threshold it skips `@high` and
+escalates backend immediately, preserving the weekly-cliff guard. Provisional pending
+telemetry (review 2026-08-17). Every `@high` dispatch must log the burn-proxy reading it
+consulted in its `cost_event` (`burn_proxy:` field); `cost-report.sh` prints a `⚠ VIOLATION`
+for any `@high` dispatch missing it — a self-evidencing audit that keeps enforcement out of
+read-only `dispatch.sh`.
+
+**Orchestrator model / Fable.** The standing orchestrator/partner model is **Opus**. Fable is
+**not** an orchestrator (it drains the Claude window ~2× faster for no orchestration gain, and
+its security restriction disqualifies it from security adjudication). Fable's only sanctioned
+role is a rare, single-spawn **adviser escalation** for an exceptional non-security judgment
+call, logged as a `cost_event`. See `MODELS.md` § Orchestrator.
+
+**Session handoff — write-through + `HANDOFF.md`.** State writes happen at the moment of the
+event, never batched: the PM may not proceed past a dispatch, task completion/failure, gate
+decision, stage transition, or escalation until `PLAN.md`/`TASK_LOG.md` reflect it — an
+unwritten event does not exist. On top of that, the PM maintains `HANDOFF.md` in the `-pm/`
+directory (sole writer, overwritten in place): current stage, in-flight dispatches, next
+planned action, open questions, and in-session-only context. It is rewritten after every gate
+decision and stage transition, and whenever you type **`checkpoint`** (the PM verifies disk
+state matches its understanding, flushes anything missing, and confirms **"safe to clear"**).
+A fresh session reads `HANDOFF.md` **first** at startup and treats needing to re-explore as a
+logged failure signal. Use `checkpoint` before clearing context at cache expiry.
+
+**Self-improvement capture — `PROPOSALS.md`.** The PM runs the framework but never edits it
+(read-only subtree). When it observes a framework defect in the field — a repeated tier
+failure, a rule forcing a bad outcome, a stall, a mispriced escalation — it appends a
+structured entry to `PROPOSALS.md` (writable `-pm/` side): date, project, observed problem,
+evidence pointer (TASK_LOG event ids / cost.jsonl lines), suggested change. Maintainer sessions
+harvest it across projects alongside `cost-report.sh` output. **The framework proposes, the
+maintainer disposes.**
+
+---
+
 ## Gate Summary
 
 | Gate | Fires when | Unlocked by |
@@ -381,5 +443,5 @@ Three `proceed`s and one `approved`. Everything else is autonomous.
 | Designer | Sonnet (escalate Opus) | Once + per new UI work | Design spec |
 | Architect | Opus | Once | Build spec + OpenCode tier selection |
 | Tech Lead | Sonnet (escalate Opus) | Per new mid-project task | Bug/feature → task spec |
-| Reviewer | opencode `standard` tier, read-only | Per builder diff | First-pass diff review; orchestrator adjudicates |
+| Reviewer | opencode `standard` tier, read-only (Sonnet min for `security` tasks) | Per builder diff | First-pass diff review; must be a different family than the builder (§14); orchestrator adjudicates |
 | OpenCode | tier ladder `fast`→`standard`→`heavy` | Per implementation task | Write code (in a per-task worktree) |
