@@ -125,6 +125,12 @@ The proxy is the same per-run token sum `cost-report.sh` already rolls up per IS
 Weekly-quota burn proxy below); the orchestrator reads the current week's total before
 deciding the @high bump.
 
+**Self-evidencing audit:** every `sol@high` dispatch must log the burn-proxy reading it
+consulted in its `cost_event` (`burn_proxy:` field — see `.claude/rules/state.md`). An
+`@high` dispatch with no burn figure in the log is an auditable violation, so the gate is
+enforceable without touching read-only `dispatch.sh` and `cost-report.sh` can flag misses
+mechanically.
+
 ### Claude tier column (subscription auth only)
 
 `fast`/`standard` → `sonnet`, `heavy` → `opus`. dispatch.sh strips `ANTHROPIC_API_KEY`

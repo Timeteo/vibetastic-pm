@@ -213,8 +213,10 @@ exhausted before metered tokens** — that is why `builder_backends` defaults to
   if the current ISO-week burn proxy in `logs/cost.jsonl` is **below**
   `codex_weekly_burn_threshold` (see `framework/MODELS.md` § Codex tier column); at/above it,
   skip @high and `backend_escalated` to the claude backend immediately. Log the skip reason
-  in the escalation event. Efforts above high are never auto-dispatched (weekly-cliff guard —
-  Gate 2 only).
+  in the escalation event. **Any `sol@high` dispatch must record the consulted burn-proxy
+  reading in its `cost_event` (`burn_proxy:` — see `state.md`); an `@high` dispatch with no
+  burn figure logged is an auditable violation.** Efforts above high are never
+  auto-dispatched (weekly-cliff guard — Gate 2 only).
 
 **Axis 2 — backend, when the current backend's ladder is exhausted or unavailable.**
 

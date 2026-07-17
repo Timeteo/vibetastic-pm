@@ -32,9 +32,18 @@ task_id: <id or null>
 role: <designer | architect | tech_lead | opencode | pm>
 model: <model/alias actually used — e.g. sonnet, opus, openrouter/google/gemini-3.5-flash>
 tier: <fast | standard | heavy | null>   # OpenCode only
+burn_proxy: <ISO-week token total consulted, integer | null>   # REQUIRED for any gpt-5.6-sol@high dispatch (see below)
 note: <one line, optional>
 ```
 ```
+
+**Burn-gate audit rule (codex `sol@high`):** every `gpt-5.6-sol@high` dispatch **must**
+record in its `cost_event` the `burn_proxy` reading it consulted before the gate (the
+current ISO-week token total from `logs/cost.jsonl` — see `framework/MODELS.md` §
+`codex_weekly_burn_threshold`). This keeps enforcement out of the read-only `dispatch.sh`
+while making a skipped check impossible to hide: an `@high` dispatch whose `cost_event`
+carries no `burn_proxy` figure is an **auditable violation**, and `cost-report.sh` can flag
+it mechanically. `burn_proxy` is `null`/omitted for every other dispatch.
 
 Run `bash framework/cost-report.sh` to roll up `logs/cost.jsonl` + `logs/agent-spawns.jsonl`
 + these `cost_event` entries against the `MODELS.md` Pricing table — the evidence base for tuning tiers (cheapest model that
