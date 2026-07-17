@@ -51,12 +51,27 @@ def price_for(model):
 
 # --- Aggregate OpenCode dispatch records ---
 agg = defaultdict(lambda: {"runs":0,"attempts":0,"dur":0,"in":0,"out":0,"cache":0,"fails":0,"cost":0.0,"costed":0,"role":"opencode"})
+# Primary reliability: keyed by the ORIGINALLY-requested primary model (r["primary_model"]),
+# so a primary that failed and was rescued by its fallback is counted against the PRIMARY,
+# not attributed to the fallback in `model`. "rescued" = the dispatch needed a same-model
+# stall retry and/or a fallback switch. Only records that carry primary_model (dispatch.sh
+# after the telemetry fix) are counted — older records are silently skipped.
+prim = defaultdict(lambda: {"runs":0,"stall_retried":0,"fell_back":0,"rescued":0})
 if os.path.exists(cost_jsonl):
     for line in open(cost_jsonl):
         line = line.strip()
         if not line: continue
         try: r = json.loads(line)
         except json.JSONDecodeError: continue
+        pm = r.get("primary_model")
+        if pm:
+            p = prim[f"{r.get('backend','opencode')}: {pm}"]
+            p["runs"] += 1
+            sr = (r.get("stall_retries") or 0) > 0
+            fb = bool(r.get("fallback_used"))
+            if sr: p["stall_retried"] += 1
+            if fb: p["fell_back"] += 1
+            if sr or fb: p["rescued"] += 1
         a = agg[f"{r.get('backend','opencode')}: {r.get('model','?')}"]
         a["role"] = r.get("role","opencode")
         a["runs"] += 1
@@ -183,6 +198,18 @@ for model, a in sorted(agg.items()):
           f"wall={a['dur']}s  in={a['in']:,}  out={a['out']:,}  cache={a['cache']:,}  {dollar}")
 if total:
     print(f"  ── Metered (OpenRouter) total: ${total:,.4f}")
+
+print("\n=== Primary reliability (per originally-requested primary model) ===")
+print("  rescued = primary needed a same-model stall retry and/or a fallback switch.")
+print("  A high rescue rate on a non-outage window is the signal to demote a tier primary.")
+if not prim:
+    print("  (no records carry primary_model yet — pre-dates the telemetry fix; will populate")
+    print("   as new dispatches run through dispatch.sh)")
+for model, p in sorted(prim.items()):
+    rate = (100.0 * p["rescued"] / p["runs"]) if p["runs"] else 0.0
+    print(f"  {model}")
+    print(f"     dispatches={p['runs']}  rescued={p['rescued']} ({rate:.0f}%)  "
+          f"[stall-retried={p['stall_retried']}  fell-back={p['fell_back']}]")
 
 print("\n=== Planning / PM agent spawns (from TASK_LOG cost_event) ===")
 if not plan:
