@@ -149,6 +149,13 @@ fi
 # Never fatal — telemetry must not affect the dispatch exit code.
 START_EPOCH="$(date +%s)"
 ATTEMPTS_USED=1
+# Primary-reliability telemetry: the cost record's `model` field is ACTIVE_MODEL (what actually
+# did the work, for correct cost attribution), which flips to the fallback on a primary infra
+# failure — so a primary that fails and is rescued is otherwise invisible in cost.jsonl. Record
+# the originally-requested primary and whether it needed rescuing so cost-report.sh can compute a
+# per-primary failure rate (the qwen3-coder-flash question — MODELS.md fast tier).
+FALLBACK_USED=false        # true once ACTIVE_MODEL switches to the fallback model
+STALL_RETRIES_USED=0       # count of silent-stall same-model retries the primary needed
 OPENCODE_DB="${OPENCODE_DB:-$HOME/.local/share/opencode/opencode.db}"
 DIR_ABS="$(cd "$DIR" 2>/dev/null && pwd || echo "$DIR")"
 
@@ -255,8 +262,9 @@ print(f'{i}|{o}|{c}')" "$CLAUDE_RESULTS" 2>/dev/null)"
         [ -n "$row" ] && IFS='|' read -r in_tok out_tok cache_tok <<< "$row"
       fi ;;
   esac
-  printf '{"ts":"%s","role":"opencode","backend":"%s","prompt":"%s","model":"%s","tier":%s,"attempts":%s,"verify_passed":%s,"exit":%s,"duration_s":%s,"cost_usd":%s,"input_tokens":%s,"output_tokens":%s,"cache_read_tokens":%s,"reasoning_tokens":%s,"log":"%s"}\n' \
+  printf '{"ts":"%s","role":"opencode","backend":"%s","prompt":"%s","model":"%s","primary_model":"%s","fallback_used":%s,"stall_retries":%s,"tier":%s,"attempts":%s,"verify_passed":%s,"exit":%s,"duration_s":%s,"cost_usd":%s,"input_tokens":%s,"output_tokens":%s,"cache_read_tokens":%s,"reasoning_tokens":%s,"log":"%s"}\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$BACKEND" "$(basename "$PROMPT_FILE")" "$ACTIVE_MODEL" \
+    "$MODEL" "$FALLBACK_USED" "${STALL_RETRIES_USED:-0}" \
     "$([ -n "$TIER" ] && printf '"%s"' "$TIER" || echo null)" \
     "${ATTEMPTS_USED:-1}" "$verify_passed" "$code" "$dur" \
     "${cost_usd:-null}" "${in_tok:-null}" "${out_tok:-null}" "${cache_tok:-null}" "${reason_tok:-null}" \
@@ -470,6 +478,7 @@ run_fresh_stall_guarded() {
       return "$ec"
     fi
     tries=$((tries + 1))
+    STALL_RETRIES_USED=$((STALL_RETRIES_USED + 1))
     echo "[dispatch] $m exited $ec with no output — infra/OpenRouter stall; immediate same-model retry ($tries/$STALL_RETRIES)." >&2
     echo "[dispatch] --- $m silent-stall retry $tries at $(date) ---" >> "$LOG_FILE"
   done
@@ -540,6 +549,7 @@ if [ $? -ne 0 ]; then
     echo "[dispatch] Primary model ($ACTIVE_MODEL) failed. Retrying with fallback: $FALLBACK_MODEL" >&2
     echo "[dispatch] --- primary ($ACTIVE_MODEL) infra failure at $(date) ---" >> "$LOG_FILE"
     ACTIVE_MODEL="$FALLBACK_MODEL"
+    FALLBACK_USED=true
     run_fresh_stall_guarded "$ACTIVE_MODEL" || { salvageable_run || finish 1; }
   else
     finish 1
