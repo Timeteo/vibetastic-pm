@@ -70,13 +70,25 @@ if os.path.exists(cost_jsonl):
         # verify_passed: false = verify exhausted; null/absent = no verifier configured (not a failure)
         if r.get("verify_passed") is False: a["fails"] += 1
 
-# --- Count planning cost_events from TASK_LOG (frequency only; tokens rarely known) ---
-plan = defaultdict(int)
+# --- Parse cost_event blocks from TASK_LOG into dicts (task_id, role, model, burn_proxy) ---
+cost_events = []
 if os.path.exists(task_log):
     txt = open(task_log).read()
-    # cost_event blocks: look for `role:` + `model:` near a cost_event header
-    for m in re.finditer(r"cost_event.*?role:\s*(\S+).*?model:\s*(\S+)", txt, re.S):
-        plan[(m.group(1).strip(), m.group(2).strip().strip('"`'))] += 1
+    # Split on each cost_event header, then read the fenced yaml body that follows it.
+    for chunk in re.split(r"·\s*cost_event", txt)[1:]:
+        body = re.search(r"```(?:yaml)?\s*(.*?)```", chunk, re.S)
+        if not body: continue
+        ev = {}
+        for kv in re.finditer(r"^\s*(\w+):\s*(.*?)\s*$", body.group(1), re.M):
+            ev[kv.group(1)] = kv.group(2).strip().strip('"`')
+        cost_events.append(ev)
+
+# --- Count planning cost_events (frequency only; tokens rarely known) ---
+plan = defaultdict(int)
+for ev in cost_events:
+    role, model = ev.get("role"), ev.get("model")
+    if role and model:
+        plan[(role, model)] += 1
 
 def est(model, tin, tout):
     p = price_for(model)
@@ -112,6 +124,40 @@ if not weekly:
 for (be, wk), w in sorted(weekly.items(), key=lambda kv: (kv[0][1], kv[0][0])):
     print(f"  {wk}  {be:7s} runs={w['runs']}  in={w['in']:,}  out={w['out']:,}  "
           f"reasoning={w['reason']:,}  cache={w['cache']:,}")
+print()
+
+# --- Burn-gate audit: every gpt-5.6-sol@high dispatch must log the burn-proxy it consulted ---
+# Rule (MODELS.md § codex_weekly_burn_threshold, state.md § burn-gate audit): an @high
+# dispatch whose cost_event carries no burn_proxy figure is an auditable violation.
+def is_high(model): return model and "sol@high" in model.lower()
+def has_burn(ev):
+    v = ev.get("burn_proxy", "")
+    return v not in ("", "null", "None", "~")
+
+high_dispatches = []  # (task_id, ts)
+if os.path.exists(cost_jsonl):
+    for line in open(cost_jsonl):
+        line = line.strip()
+        if not line: continue
+        try: r = json.loads(line)
+        except json.JSONDecodeError: continue
+        if is_high(r.get("model")):
+            high_dispatches.append((r.get("task_id"), r.get("ts", "?")))
+
+evidence_task_ids = {ev.get("task_id") for ev in cost_events
+                     if is_high(ev.get("model")) and has_burn(ev)}
+
+print("=== Burn-gate audit (codex sol@high) ===")
+if not high_dispatches:
+    print("  (no sol@high dispatches — nothing to audit)")
+else:
+    violations = [(tid, ts) for (tid, ts) in high_dispatches
+                  if tid not in evidence_task_ids]
+    ok = len(high_dispatches) - len(violations)
+    print(f"  sol@high dispatches: {len(high_dispatches)}  with logged burn_proxy: {ok}")
+    for tid, ts in violations:
+        print(f"  ⚠ VIOLATION: sol@high dispatch task_id={tid} ts={ts} — "
+              f"no cost_event with a burn_proxy reading (see state.md burn-gate audit rule)")
 print()
 
 print("=== Builder dispatches (from logs/cost.jsonl) ===")
