@@ -198,14 +198,14 @@ These override convenience. Each cost real cycles when ignored.
 
 ### Architect
 - **Receives:** SPEC.md, `prompts/design-spec.md`, target project path, RULES.md (model selection section)
-- **Returns:** Structured build spec (markdown) to be written to `prompts/build-spec.md`, plus a selected tier (`fast`/`standard`/`heavy`) in the result YAML
-- **Does:** Classify task complexity against the tier definitions in `framework/MODELS.md` (the curated inventory — it does **not** query OpenRouter)
+- **Returns:** Structured build spec (markdown) to be written to `prompts/build-spec.md`, plus a selected tier (`fast`/`standard`/`heavy`) and a `security: true|false` flag per task in the result YAML
+- **Does:** Classify task complexity against the tier definitions in `framework/MODELS.md` (the curated inventory — it does **not** query OpenRouter); set `security: true` on any Stage-2 task whose diff touches auth, credentials, keychain, entitlements, network trust, sandboxing, or input validation on external data (see `VERIFY.md` § Security-sensitive tasks)
 - **Does not:** Execute OpenCode or pick raw model slugs — the PM resolves tier → model/fallback from MODELS.md
 
 ### Tech Lead
 - **Receives:** Issue description, full build-spec, PLAN.md summary, target project path, optional error output
 - **Does:** Reads actual source files in the target project to understand current state; fetches Apple/framework docs via Sosumi MCP if relevant; writes a precise task spec
-- **Returns:** Task spec section (appended to build-spec.md) + structured YAML metadata (task title, branch, issue refs, depends_on, suggested model)
+- **Returns:** Task spec section (appended to build-spec.md) + structured YAML metadata (task title, branch, issue refs, depends_on, suggested tier, and a `security: true|false` flag). Sets `security: true` when the diff touches auth, credentials, keychain, entitlements, network trust, sandboxing, or input validation on external data — this forces the review rung up (see `VERIFY.md` § Security-sensitive tasks). Bias toward `true` when unsure.
 - **Does not:** Write code, execute commands in the target project, or make implementation decisions beyond speccing
 - **Model:** Sonnet by default; PM may use Opus for complex architectural tasks
 
@@ -215,6 +215,8 @@ These override convenience. Each cost real cycles when ignored.
 - **Returns:** VERDICT (APPROVE / APPROVE-WITH-FOLLOWUPS / REJECT) + findings; the orchestrator adjudicates against the spec and decides merge / reject / re-dispatch
 - **Does not:** modify any file (enforced — dispatch exits 21 on a dirty tree), merge, or decide
 - **Why:** the intent-review rung of the gate (`VERIFY.md`) must run on every diff; running it on Opus was the measured top cost sink, so Opus only adjudicates
+- **Family diversity (hard rule):** the reviewer must be a different model family than the builder backend that produced the diff — claude-backend diffs never use the Sonnet subagent (route to opencode `standard`/deepseek); codex/opencode diffs may use either. See `VERIFY.md` § Diff review.
+- **Security override:** for a `security: true` task the first pass runs on **Sonnet minimum** (not the cheap opencode tier) and adjudication is **mandatory Opus, never delegated, never Fable**. This is the deliberate exception to the cheap-first bias (see `VERIFY.md` § Security-sensitive tasks).
 
 ### OpenCode (via PM shell invocation)
 - **Invoked with:** `bash framework/dispatch.sh --worktree <branch> <model> <target-project-path> <per-task-prompt-file> [fallback] [verify-cmd] [max-attempts] [tier]` — PM extracts a task-scoped prompt file via awk before calling dispatch (see `.claude/rules/dispatch.md`). `--worktree` isolates the builder in a per-task git worktree so the live checkout is never touched.

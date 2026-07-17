@@ -69,6 +69,39 @@ costs ~zero in practice.
 
 ---
 
+## Security-sensitive tasks — the one place cheap-first is wrong (2026-07-17)
+
+A task carries `security: true` when its diff touches **auth, credentials, keychain,
+entitlements, network trust, sandboxing, or input validation on data from outside the
+app**. The Tech Lead sets the flag in its result metadata; the Architect sets it for
+Stage-2 tasks. The orchestrator records it on the task in PLAN.md alongside `verify_tier`
+and states it in the task prompt. **Bias up when unsure** — the flag is cheap, a miss is not.
+
+Effect — the review rung is forced up, in two places:
+
+1. **First-pass review runs on Sonnet minimum.** The cheap opencode tier is not an
+   acceptable first pass for a security diff. Use a Sonnet subagent (or higher), or an
+   opencode reviewer only *in addition to*, never *instead of*, the Sonnet rung.
+2. **Adjudication is mandatory Opus, and is never delegated.** The orchestrator reads the
+   security diff itself. This is an explicit, deliberate exception to RULES.md operating
+   lesson 3 and to the pm-scope delegation defaults. **Fable must never be used** for
+   security adjudication or security review — it is policy-restricted from security work
+   (MODELS.md § Orchestrator).
+
+Where this collides with the family-diversity rule above (a claude-built security diff),
+the **security floor wins**: satisfy diversity by picking a non-Anthropic reviewer at or
+above the Sonnet capability rung (opencode `heavy`, glm-5.2) *in addition to* the Sonnet
+pass, or record in the TASK_LOG verdict that diversity was consciously traded for the
+security floor. Never resolve the collision by dropping to the cheap tier.
+
+**Rationale:** a missed security bug does not fail a verify loop — it ships, silently, and
+the cost lands later and outside the project. Every other rung in this file assumes a
+failure surfaces as a red build or a wrong pixel; security failures surface as nothing at
+all. That asymmetry is why this is the one category where cheap-first review is the wrong
+bias, and why the token cost of an Opus read is not a consideration here.
+
+---
+
 ## R1 rules — real payloads through the real path
 
 - **Never mock the boundary under test.** Mocks above the boundary (to isolate logic that
@@ -109,7 +142,9 @@ costs ~zero in practice.
 
 ## Enforcement
 
-- Task specs and PLAN.md tasks carry `verify_tier: R0|R1|R2`.
+- Task specs and PLAN.md tasks carry `verify_tier: R0|R1|R2` and `security: true|false`.
+  A `security: true` task forces the review rung up (Sonnet-minimum first pass, mandatory
+  Opus adjudication — see Security-sensitive tasks above).
 - The orchestrator does not merge until the tier's full ladder has passed and the diff
   review verdict is recorded (TASK_LOG event or PR comment).
 - Genuinely device-only checks (GPU effects, haptics, perf feel) are flagged as an

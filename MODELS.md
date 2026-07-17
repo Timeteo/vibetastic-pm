@@ -180,7 +180,7 @@ offload lane). Context/prices verified on OpenRouter 2026-06-29.
 | Model slug | $ in | $ out | Ctx | Notes |
 |------------|------|-------|-----|-------|
 | `opus` / `claude-opus-4.8` | 5.00 | 25.00 | 1M | Subscription only (Architect; Gate-2 re-spec). **Never via API/opencode.** |
-| `fable` / `claude-fable-5` | 10.00 | 50.00 | — | Not used by a role today |
+| `fable` / `claude-fable-5` | 10.00 | 50.00 | — | Adviser-escalation only (§ Orchestrator). **Policy-restricted from security work** — never review or adjudicate a `security: true` task |
 | `sonnet` / `claude-sonnet-4.6` | 3.00 | 15.00 | 1M | Subscription only (PM + Tech Lead default) |
 | `haiku` / `claude-haiku-4-5` | 1.00 | 5.00 | 200K | Subscription only (commit subagent / mechanical steps) |
 | `openrouter/deepseek/deepseek-v4-pro` | 0.43 | 0.87 | 1M | **standard** primary; fast/heavy fallback — cheapest, top SWE-bench |

@@ -185,6 +185,14 @@ Classify the implementation work by complexity:
 
 Select the model from the OpenCode Tiers table in `framework/MODELS.md` that matches your classification. Use only `confirmed: yes` models. If the appropriate tier has no confirmed model, fall back to the `fast` tier model.
 
+Also set a `security` flag: `true` if the implementation work touches **auth, credentials,
+keychain, entitlements, network trust, sandboxing, or input validation on data from outside
+the app**, otherwise `false`. Bias toward `true` when unsure — the flag forces the review
+rung up (Sonnet-minimum first pass, mandatory Opus adjudication; see `framework/VERIFY.md`
+§ Security-sensitive tasks). If the build spec defines multiple Stage-2 tasks with differing
+security exposure, note the per-task flag in each task section and set the result YAML flag
+to `true` if **any** task qualifies.
+
 ---
 
 ## Return Format
@@ -200,6 +208,8 @@ selected_model: <model-id-string>
 selected_tier: <fast | standard | heavy>
 model_rationale: "<one sentence>"
 model_fallback_used: <true | false>
+security: <true | false>
+security_rationale: "<one sentence — which trigger applies, or why none does>"
 ```
 <!-- ARCHITECT_RESULT_END -->
 ```

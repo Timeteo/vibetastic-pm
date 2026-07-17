@@ -160,6 +160,18 @@ State your tier recommendation and one-sentence rationale.
 
 ---
 
+## Step 4 — Set the Security Flag
+
+Set `security: true` if this task's diff touches any of: **auth, credentials, keychain,
+entitlements, network trust, sandboxing, or input validation on data from outside the app**.
+Otherwise `security: false`. Bias toward `true` when unsure — the flag is cheap and a missed
+security bug ships silently rather than failing a verify loop. A `security: true` task forces
+the first-pass review onto Sonnet-minimum and mandatory Opus adjudication (see
+`framework/VERIFY.md` § Security-sensitive tasks). State one sentence on why you set the flag
+the way you did.
+
+---
+
 ## Return Format
 
 Return your output as a single document structured exactly as follows:
@@ -177,6 +189,8 @@ issue_refs: "<comma-separated issue numbers, or null>"
 depends_on: [<task ids that must be done first, or empty>]
 suggested_tier: <fast | standard | heavy>
 tier_rationale: "<one sentence>"
+security: <true | false>
+security_rationale: "<one sentence — which trigger applies, or why none does>"
 ```
 <!-- TECH_LEAD_RESULT_END -->
 ```

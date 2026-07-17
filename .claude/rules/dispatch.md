@@ -48,7 +48,7 @@ Spawn a fresh Agent with the rendered prompt.
 
 After return, parse on delimiter `<!-- ARCHITECT_RESULT_START -->`:
 1. Everything **before** the delimiter → write to `prompts/build-spec.md`. **Written once, never appended to again.**
-2. YAML block **after** the delimiter → extract `selected_tier`, read `framework/MODELS.md` to resolve the `model` and `fallback` columns for that tier, write to `tasks[n].model` and `tasks[n].fallback_model` in PLAN.md; log `model_fallback_used` if true.
+2. YAML block **after** the delimiter → extract `selected_tier`, read `framework/MODELS.md` to resolve the `model` and `fallback` columns for that tier, write to `tasks[n].model` and `tasks[n].fallback_model` in PLAN.md; log `model_fallback_used` if true. Also extract `security` and write it to `tasks[n].security` (default `false`); for a multi-task build spec, apply the per-task flag noted in each task section.
 
 Then: append `model_selected`, `agent_returned`, `task_completed` to TASK_LOG. Update task: `status: done`, `completed_at`.
 
@@ -82,6 +82,7 @@ After return, parse on delimiter `<!-- TECH_LEAD_RESULT_START -->`:
    - `branch_name`, `issue_refs` → store in `notes`
    - `depends_on` → `depends_on`
    - `suggested_tier` → look up `model` and `fallback` columns in `framework/MODELS.md` for that tier; write to `model` and `fallback_model`
+   - `security` → write to `security` on the task (default `false` if absent). A `security: true` task forces the review rung up at merge time (Sonnet-minimum first pass, mandatory Opus adjudication — see `framework/VERIFY.md`).
    - Assign next available task id
    - Set `status: pending`, `agent: opencode`, `failure_count: 0`
 
