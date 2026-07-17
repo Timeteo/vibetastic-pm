@@ -217,6 +217,31 @@ caught, (3) rewrites `HANDOFF.md`, and (4) confirms **"safe to clear"** (or name
 what is still in flight if it is not). This is the user's signal that they are about to clear
 context; the PM's job is to make the clear lossless.
 
+## Self-Improvement Capture — the framework proposes, the maintainer disposes (2026-07-17)
+
+The PM runs the framework in the field but **never edits the framework itself** (`framework/`
+is a read-only subtree). When it observes a framework defect in the field — a repeated tier
+failure, a rule that forces a bad outcome, a stall, an escalation that telemetry later shows
+was mispriced — it does not work around it silently and it does not patch the framework. It
+records the observation in `PROPOSALS.md` for a maintainer to adjudicate.
+
+`PROPOSALS.md` lives in the `-pm/` directory (the **writable** side — **not** `framework/`).
+It is **append-only**; the PM adds a structured entry:
+
+```markdown
+### <ISO8601> · <project-name>
+- **Observed problem:** <what went wrong, one or two sentences>
+- **Evidence:** <TASK_LOG event ids / cost.jsonl line refs / log file paths — a concrete pointer>
+- **Suggested change:** <the framework change that would prevent it — a proposal, not a patch>
+```
+
+Periodic maintainer sessions (like the one that wrote this section) harvest `PROPOSALS.md`
+across all projects together with `cost-report.sh` output, and decide what graduates into
+the framework. The division is deliberate: **the framework proposes, the maintainer
+disposes** — field sessions surface evidence, a maintainer with cross-project view decides
+what becomes a rule. This keeps the framework from accreting one-off local fixes while still
+capturing every real defect the moment it's seen.
+
 ## Operating lessons (hard-won 2026-06-29)
 
 These override convenience. Each cost real cycles when ignored.
