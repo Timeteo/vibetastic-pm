@@ -38,6 +38,8 @@ The PM orchestrator is the **sole writer** to all state files. Subagents receive
 | PLAN.md | PM | PM |
 | RULES.md | Human (setup) | PM, all agents |
 | TASK_LOG.md | PM (append-only) | PM (recovery) |
+| HANDOFF.md | PM (sole writer, overwritten in place) | PM (next session, read first at startup) |
+| PROPOSALS.md | PM (append-only) | Maintainer (harvest) |
 | prompts/design-spec.md | PM (from Designer output) | Architect, Tech Lead |
 | prompts/build-spec.md | PM (from Architect output, Stage 2 only — never modified after) | Tech Lead |
 | prompts/task-T0XX.md | PM (awk extract for Architect tasks; direct write for Tech Lead tasks) | OpenCode |
@@ -174,6 +176,46 @@ The PM handles these autonomously without pausing for user input:
 | Agent returns malformed/unparseable output | Log, retry once; if second parse failure, treat as task failure (increments `failure_count`) |
 
 ---
+
+## Session Handoff (2026-07-17)
+
+Observed failure: the orchestrator sometimes hasn't flushed session state to disk when the
+user clears context at cache expiry, so the next session burns tokens re-exploring to
+reconstruct what was already known. State that lives only in the conversation dies with the
+context window. Two rules close the gap.
+
+### Write-through state rule
+
+**State writes happen at the moment of the event, never batched.** The PM may not proceed
+past any state-changing event — a dispatch, a task completion or failure, a gate decision, a
+stage transition, an escalation — until `PLAN.md` / `TASK_LOG.md` reflect it on disk. An
+unwritten event does not exist: if the context is cleared between the event and the write,
+the event is lost with no trace. This is stricter than "apply results promptly" — it forbids
+holding *any* state change in-conversation while doing further work. One read-write cycle per
+event (see `.claude/rules/state.md`), completed before the next action.
+
+### HANDOFF.md checkpoint
+
+`HANDOFF.md` lives in the `-pm/` directory (PM is the **sole writer**; overwritten in place,
+never appended). It captures the in-session context that the durable state files don't — the
+things a fresh session would otherwise have to re-derive. It contains:
+
+- **Current stage + status** — which stage, which tasks in flight vs. done.
+- **In-flight dispatches** — for each: task id, backend, tier, started-at, worktree path.
+- **Next planned action** — what the orchestrator intended to do next.
+- **Open questions awaiting the user** — any gate or decision the session is blocked on.
+- **In-session-only context** — anything load-bearing that isn't already in PLAN/TASK_LOG
+  (a diagnosis conclusion, a decision rationale, a reviewer verdict not yet merged).
+
+The PM rewrites `HANDOFF.md` **after every gate decision and every stage transition**, and
+whenever the user says **"checkpoint"**.
+
+**The `checkpoint` command (explicit):** when the user types `checkpoint`, the PM (1) verifies
+disk state (`PLAN.md`/`TASK_LOG.md`) matches its session understanding, (2) flushes anything
+missing — including any unwritten event, which the write-through rule should already have
+caught, (3) rewrites `HANDOFF.md`, and (4) confirms **"safe to clear"** (or names exactly
+what is still in flight if it is not). This is the user's signal that they are about to clear
+context; the PM's job is to make the clear lossless.
 
 ## Operating lessons (hard-won 2026-06-29)
 

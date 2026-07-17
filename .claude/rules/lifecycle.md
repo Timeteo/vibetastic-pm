@@ -4,9 +4,20 @@
 
 After `eval "$(~/.ssh/gh-agent-token.sh)"`, check for `PROJECT.md`. If missing, run Onboarding. Otherwise read `PROJECT.md` for the code directory path, then:
 
+0. **Read `HANDOFF.md` FIRST** (if it exists). It is the prior session's flushed picture of
+   where things stood — current stage, in-flight dispatches, next planned action, open
+   questions, and in-session-only context. It exists so a fresh session does **not** have to
+   re-derive state by exploring. Treat needing to explore the code/logs to reconstruct state
+   as a **failure signal**: the handoff was incomplete. Log a `handoff_gap` note to TASK_LOG
+   (what was missing) so the gap can be fixed — the write-through and checkpoint rules
+   (`framework/RULES.md` § Session Handoff) are supposed to prevent it.
 1. Read `SPEC.md` — check `status`
 2. Read `PLAN.md` — check stage and task statuses
 3. Read `TASK_LOG.md` last 20 entries — understand what just happened
+
+`HANDOFF.md` is orientation, not authority: where it disagrees with `PLAN.md`/`TASK_LOG.md`,
+the durable state files win (the handoff may predate the last write). Reconcile and, if the
+handoff was stale, note it.
 
 Branch on state:
 
