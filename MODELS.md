@@ -23,6 +23,19 @@ serves as the human's thinking partner. That is only affordable because the orch
 measured failure mode is the partner absorbing those roles itself at Opus rates —
 RULES.md operating lessons 2–3 exist because that burned a session budget in one day.
 
+**The standing orchestrator model is Opus (2026-07-17).** Fable is **not** an orchestrator:
+it drains the Claude subscription window ~2× faster than Opus for no orchestration gain
+(orchestration is coordination and judgment, not raw reasoning depth — the place Fable's
+extra cost would buy something), and its security restriction disqualifies it from security
+adjudication, which the orchestrator must always be able to do itself. Do not run the
+partner session on Fable.
+
+Fable's **only** sanctioned role is a deliberate, rare, **single-spawn adviser escalation**
+for an exceptional **non-security** judgment call the orchestrator wants a second frontier
+opinion on — spawned once, consumed, and logged as a `cost_event` (role `pm`, model
+`fable`, with a one-line note on why the escalation was worth the window burn). It is never
+a standing role, never the orchestrator, and never touches `security: true` work.
+
 ## Agent Roles
 
 These agents are spawned via Claude Code's `Agent` tool, which accepts shorthand aliases
