@@ -39,7 +39,18 @@ a heavy-tier task that still fails Gate 2 on Opus) is the safety net. Telemetry
 | Designer | `sonnet` | `opus` | UI/structural reasoning; Sonnet handles most. (In Hometastic, design is frozen — Designer should not run at all.) |
 | Architect | `opus` | — | Stage-2 subsystem design needs peak reasoning; invoked rarely, so low frequency = low cost |
 | Tech Lead | `sonnet` | `opus` | Most frequently spawned reasoning role; a spec is cheap to redo, so default cheap. Escalate to Opus only for architecturally heavy work |
-| Reviewer | opencode `standard` tier (or `sonnet` subagent) | orchestrator adjudicates | First-pass diff review runs cheap and read-only (`dispatch.sh --read-only` + `prompts/reviewer.md`); Opus reads only the verdict. See VERIFY.md |
+| Reviewer | opencode `standard` tier (or `sonnet` subagent) | orchestrator adjudicates | First-pass diff review runs cheap and read-only (`dispatch.sh --read-only` + `prompts/reviewer.md`); Opus reads only the verdict. **Family-diversity rule applies** (below). See VERIFY.md |
+
+### Reviewer family diversity (2026-07-17)
+
+The first-pass Reviewer must be a **different model family than the builder backend that
+produced the diff** — same-family review reproduces the builder's blind spots. Concretely:
+a diff built by the **claude** backend (sonnet/opus) must **not** be reviewed by the Sonnet
+subagent variant; route it to the opencode `standard` tier (deepseek). Diffs from `codex`
+or `opencode` may use either reviewer variant (for an opencode-built diff, pick a reviewer
+family the builder didn't use). The claude backend is the minority lane, so the cost delta
+of forcing its diffs onto the opencode reviewer is ~zero. Full rule and routing table:
+`VERIFY.md` § Diff review.
 
 To escalate a role for one spawn (e.g. a genuinely architectural Tech Lead pass), use the
 `Escalate to` model and log it in the `cost_event` (see `.claude/rules/state.md`).

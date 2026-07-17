@@ -50,6 +50,23 @@ Cost structure (this is deliberate — see RULES.md operating lesson 3):
 
 A diff merged without this rung is a gate violation regardless of tier.
 
+### Reviewer family diversity (hard rule, 2026-07-17)
+
+**The first-pass Reviewer must be a different model family than the builder backend that
+produced the diff.** Same-family review reproduces the builder's blind spots: the reviewer
+finds the diff reasonable for exactly the reasons the builder wrote it that way, and the
+rung silently degrades into self-review.
+
+| Diff built by | Allowed first-pass Reviewer |
+|---|---|
+| `claude` backend (sonnet/opus) | opencode `standard` tier (deepseek) — **not** the Sonnet subagent |
+| `codex` backend (gpt-5.6-*) | either variant (opencode `standard`, or Sonnet subagent) |
+| `opencode` backend (deepseek/glm/qwen) | either variant (Sonnet subagent, or opencode `standard` on a **different** family than the builder used) |
+
+Cost note: the claude backend is the minority lane (second in `builder_backends`, reached
+only after the codex ladder is exhausted), so forcing its diffs onto the opencode reviewer
+costs ~zero in practice.
+
 ---
 
 ## R1 rules — real payloads through the real path
