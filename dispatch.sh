@@ -13,9 +13,11 @@
 #
 # --read-only: for diagnosis/review dispatches (RULES.md lesson 2, VERIFY.md diff review).
 #   The model is expected to investigate and report, changing nothing. Enforced structurally:
-#   if the target git tree differs after the run (status, or content of tracked files —
-#   including files that were already dirty), dispatch exits 21 (changes left in place
-#   for inspection — never auto-reverted). The verify loop is skipped in this mode.
+#   if the target git tree differs after the run (status, content of tracked files — including
+#   files that were already dirty — or content of untracked, non-ignored files), dispatch exits
+#   21 (changes left in place for inspection — never auto-reverted). Ignored files are excluded
+#   from the snapshot for practicality, so mutating a gitignored file is the one unenforced edge.
+#   The verify loop is skipped in this mode.
 #
 # --worktree <branch>: run the builder in an isolated git worktree instead of the live
 #   checkout. The worktree is created at <project-dir>/../<project>-worktrees/<prompt-basename>
@@ -111,7 +113,14 @@ else
   LOG_DIR="${LOG_DIR:-logs}"
 fi
 mkdir -p "$LOG_DIR"
-LOG_FILE="${LOG_DIR}/$(basename "${PROMPT_FILE%.md}")-$(date +%Y%m%d-%H%M%S).log"
+# Per-run uniqueness (issue #5): the second-granularity timestamp alone collides when the same
+# prompt is dispatched twice within one second (tier escalation, retries) and the fixed
+# verifier-output path collides across concurrent --worktree dispatches. Suffix the PID so the
+# logfile — and every temp path derived from it below (verifier output, captured builder
+# output, per-backend event/result files) — is unique per invocation.
+LOG_FILE="${LOG_DIR}/$(basename "${PROMPT_FILE%.md}")-$(date +%Y%m%d-%H%M%S)-$$.log"
+VERIFY_OUT="${LOG_FILE%.log}.verify.out"   # per-run, not the old shared ${LOG_DIR}/.verify.out
+STALL_OUT="${LOG_FILE%.log}.lastout"       # captured builder stdout, used by the stall guard
 
 # Active model — may switch to the fallback on an infra failure of the initial run.
 ACTIVE_MODEL="$MODEL"
@@ -329,15 +338,33 @@ print(tid)" "$CODEX_EVENTS.turn" 2>/dev/null || true)"
 # verify-cmd OUTSIDE the sandbox, so codex never has to run the build/test toolchain itself.
 # `git --git-common-dir` resolves to the main .git for a worktree and to <repo>/.git otherwise;
 # both need the grant. `exec resume` has no `-s` but accepts `-c`, so both paths pass it via -c.
-codex_git_root_arg() {
-  local gc; gc="$(git -C "$DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
-  [ -n "$gc" ] && printf -- '-c\nsandbox_workspace_write.writable_roots=["%s"]\n' "$gc"
+# The git common dir is always granted (self-commit, above). CODEX_EXTRA_WRITABLE_ROOTS
+# (issue #7) lets the PM add narrow extra writable roots per task so an in-sandbox verify can
+# succeed where workspace-write otherwise denies the writes — for iOS/Xcode tasks that means
+# the SwiftPM cache (e.g. ~/Library/Caches/org.swift.swiftpm) and the DerivedData root, passed
+# as a colon-separated list of ABSOLUTE paths. Keep it least-privilege: name the specific cache
+# dirs, not $HOME/Library. CAVEAT: CoreSimulatorService is a Mach service, NOT a filesystem
+# path — it cannot be granted under workspace-write (only full-access, which is rejected here),
+# so simulator-dependent tests still can't run inside the sandbox. This grant only unblocks
+# compile / SwiftPM-cache / DerivedData writes so the builder can iterate against build errors;
+# dispatch.sh's out-of-sandbox verify (run_verify) remains the correctness gate for sim tests.
+codex_writable_roots_arg() {
+  local gc roots=() r json
+  gc="$(git -C "$DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+  [ -n "$gc" ] && roots+=("$gc")
+  if [ -n "${CODEX_EXTRA_WRITABLE_ROOTS:-}" ]; then
+    local IFS=:
+    for r in $CODEX_EXTRA_WRITABLE_ROOTS; do [ -n "$r" ] && roots+=("$r"); done
+  fi
+  [ ${#roots[@]} -eq 0 ] && return 0
+  json="$(printf '"%s",' "${roots[@]}")"
+  printf -- '-c\nsandbox_workspace_write.writable_roots=[%s]\n' "${json%,}"
 }
 
 run_codex_fresh() {
   local spec="$1" args=()
   while IFS= read -r a; do args+=("$a"); done < <(codex_effort_args "$spec")
-  while IFS= read -r a; do args+=("$a"); done < <(codex_git_root_arg)
+  while IFS= read -r a; do args+=("$a"); done < <(codex_writable_roots_arg)
   "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" codex exec \
     --json -C "$DIR" -s workspace-write --skip-git-repo-check \
     -c sandbox_workspace_write.network_access=true \
@@ -353,7 +380,7 @@ run_codex_continue() {
   local spec="$1" message="$2" args=()
   [ -z "$CODEX_THREAD_ID" ] && { echo "[dispatch] codex: no thread id to resume" >&2; return 1; }
   while IFS= read -r a; do args+=("$a"); done < <(codex_effort_args "$spec")
-  while IFS= read -r a; do args+=("$a"); done < <(codex_git_root_arg)
+  while IFS= read -r a; do args+=("$a"); done < <(codex_writable_roots_arg)
   # `exec resume` takes no -C/-s and runs in the CALLER's cwd (verified e2e 2026-07-15 —
   # it does NOT restore the thread's original cwd), so cd into the target dir explicitly.
   ( cd "$DIR" && "${TIMEOUT_PREFIX[@]}" "${BUILDER_ENV[@]}" codex exec resume "$CODEX_THREAD_ID" \
@@ -420,12 +447,40 @@ run_claude_continue() {
 run_builder_fresh()    { "run_${BACKEND}_fresh" "$@"; }
 run_builder_continue() { "run_${BACKEND}_continue" "$@"; }
 
+# --- Silent-stall guard (issue #4) ---
+# Intermittent OpenRouter/init stalls: the builder loads config, logs `init`, then produces
+# NO assistant/tool output and exits non-zero ~60s later. The old flow then burned the
+# fallback model on the same dead window (which stalled identically) and reported a whole
+# cycle of zero work. Field evidence: an immediate re-dispatch of the SAME model succeeded.
+# So: capture the fresh run's stdout (which for every backend is the builder's assistant
+# report — empty means it never spoke), and when a run exits non-zero having produced no
+# output, treat it as an infra stall and re-run the same model immediately, up to
+# STALL_RETRIES times, before falling through to the fallback. A true no-exit hang is still
+# bounded by DISPATCH_TIMEOUT (the `timeout` wrapper) above.
+# The redirect+cat (not a pipe) keeps run_*_fresh in the current shell so the backend session
+# state it sets (CODEX_THREAD_ID / CLAUDE_SESSION_ID, needed by the verify-resume loop) is
+# preserved. Override count with OPENCODE_DISPATCH_STALL_RETRIES; 0 restores the old behavior.
+STALL_RETRIES="${OPENCODE_DISPATCH_STALL_RETRIES:-1}"
+run_fresh_stall_guarded() {
+  local m="$1" tries=0 ec
+  while :; do
+    run_builder_fresh "$m" > "$STALL_OUT"; ec=$?
+    cat "$STALL_OUT"   # pass the builder's report through to the PM on stdout, as before
+    if [ "$ec" -eq 0 ] || [ -s "$STALL_OUT" ] || [ "$tries" -ge "$STALL_RETRIES" ]; then
+      return "$ec"
+    fi
+    tries=$((tries + 1))
+    echo "[dispatch] $m exited $ec with no output — infra/OpenRouter stall; immediate same-model retry ($tries/$STALL_RETRIES)." >&2
+    echo "[dispatch] --- $m silent-stall retry $tries at $(date) ---" >> "$LOG_FILE"
+  done
+}
+
 run_verify() {
   # Run the verifier in the target dir; tee combined output to the logfile. Returns its exit.
   echo "[dispatch] --- verify: $VERIFY_CMD ($(date)) ---" >> "$LOG_FILE"
-  ( cd "$DIR" && bash -c "$VERIFY_CMD" ) > "$LOG_DIR/.verify.out" 2>&1
+  ( cd "$DIR" && bash -c "$VERIFY_CMD" ) > "$VERIFY_OUT" 2>&1
   local vec=$?
-  cat "$LOG_DIR/.verify.out" >> "$LOG_FILE"
+  cat "$VERIFY_OUT" >> "$LOG_FILE"
   return $vec
 }
 
@@ -448,6 +503,13 @@ tree_state() {
   {
     git -C "$DIR_ABS" status --porcelain | sort
     git -C "$DIR_ABS" diff HEAD | shasum
+    # Untracked, non-ignored files hashed by content (issue #6): status --porcelain lists them
+    # by NAME only, so an in-place edit that keeps the same filename would otherwise leave the
+    # snapshot unchanged. Ignored files (build products, DerivedData, node_modules) are
+    # deliberately excluded to keep the snapshot practical — mutation of a gitignored file
+    # remains an unenforced edge; lean on the backend's real sandbox for that case.
+    ( cd "$DIR_ABS" && git ls-files --others --exclude-standard -z | sort -z \
+        | xargs -0 -r shasum )
   } 2>/dev/null
 }
 if $READ_ONLY; then
@@ -468,8 +530,8 @@ salvageable_run() {
   return 0
 }
 
-# --- Initial run (with fallback on infra failure) ---
-run_builder_fresh "$ACTIVE_MODEL"
+# --- Initial run (silent-stall guard, then fallback on infra failure) ---
+run_fresh_stall_guarded "$ACTIVE_MODEL"
 if [ $? -ne 0 ]; then
   if salvageable_run; then
     echo "[dispatch] $ACTIVE_MODEL exited non-zero but left committed work and a clean tree — skipping fallback; verifying what's there." >&2
@@ -478,7 +540,7 @@ if [ $? -ne 0 ]; then
     echo "[dispatch] Primary model ($ACTIVE_MODEL) failed. Retrying with fallback: $FALLBACK_MODEL" >&2
     echo "[dispatch] --- primary ($ACTIVE_MODEL) infra failure at $(date) ---" >> "$LOG_FILE"
     ACTIVE_MODEL="$FALLBACK_MODEL"
-    run_builder_fresh "$ACTIVE_MODEL" || { salvageable_run || finish 1; }
+    run_fresh_stall_guarded "$ACTIVE_MODEL" || { salvageable_run || finish 1; }
   else
     finish 1
   fi
@@ -515,7 +577,7 @@ while true; do
 
   echo "[dispatch] verify failed (attempt $attempt/$MAX_ATTEMPTS). Feeding error back to $ACTIVE_MODEL." >&2
   FEEDBACK="$(printf 'The verification command failed. Fix the code so it passes, then stop.\n\nCommand:\n%s\n\nOutput (tail):\n%s\n' \
-    "$VERIFY_CMD" "$(tail -c 8000 "$LOG_DIR/.verify.out")")"
+    "$VERIFY_CMD" "$(tail -c 8000 "$VERIFY_OUT")")"
 
   run_builder_continue "$ACTIVE_MODEL" "$FEEDBACK" || finish 1
   attempt=$((attempt + 1))

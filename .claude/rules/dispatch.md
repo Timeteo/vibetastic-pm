@@ -166,6 +166,16 @@ bash framework/dispatch.sh --worktree "<branch>" <tasks[n].model> ../<project-na
   `logs/cost.jsonl` for cost telemetry only — it does not change dispatch behavior. Also append
   a `cost_event` to TASK_LOG before dispatching (see `state.md` → Cost telemetry).
 
+- **codex + iOS/Xcode tasks** (`CODEX_EXTRA_WRITABLE_ROOTS`): on the codex backend the
+  builder's in-sandbox `xcodebuild` is denied SwiftPM-cache and DerivedData writes, so it
+  can't iterate against build errors. For an iOS build task, export
+  `CODEX_EXTRA_WRITABLE_ROOTS` (colon-separated absolute paths — the SwiftPM cache dir e.g.
+  `$HOME/Library/Caches/org.swift.swiftpm` and the DerivedData root) on the dispatch command;
+  dispatch.sh adds them to codex's least-privilege `writable_roots`. Name the specific cache
+  dirs, not `$HOME/Library`. Caveat: CoreSimulatorService is a Mach service and can't be
+  granted under workspace-write, so simulator-dependent tests still won't run in-sandbox — the
+  out-of-sandbox verify (5th arg) stays the correctness gate for those.
+
 Capture exit code and full stdout/stderr. dispatch.sh writes the complete opencode + verifier
 log to a per-run file under `logs/` and prints its path to stderr; on any non-zero exit it
 echoes the last 40 lines so a failure is never silent.
