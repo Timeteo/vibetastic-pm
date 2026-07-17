@@ -83,11 +83,34 @@ effort second**.
 |------|-------------|-------|
 | `fast` | `gpt-5.6-luna` | default effort (medium) |
 | `standard` | `gpt-5.6-terra` | default effort (medium) |
-| `heavy` | `gpt-5.6-sol@low` | sol's default is low ("highly capable at lower efforts"); one retry bump to `gpt-5.6-sol@medium` counts as the heavy rung's second attempt |
+| `heavy` | `gpt-5.6-sol@low` | sol's default is low ("highly capable at lower efforts"); one retry bump to `gpt-5.6-sol@medium` counts as the heavy rung's second attempt, then one **burn-gated** bump to `gpt-5.6-sol@high` (below) before the backend counts as exhausted |
 
-`high`/`xhigh`/`max`/`ultra` efforts and prior-gen models (gpt-5.5/5.4/5.4-mini — dominated
-by the 5.6 ladder) are **not** auto-dispatched; sol above medium is a Gate 2 user decision
-(the weekly-cliff guard). Codex fallback column is empty — backend order *is* the fallback.
+**Extended heavy rung — `sol@high`, burn-gated (2026-07-17, provisional).** Goal: preserve
+the Claude subscription window (the scarcer pool) by letting the more generous codex
+allowance absorb more before control falls through to the claude backend. After
+`gpt-5.6-sol@medium` fails (exit 20), dispatch attempts `gpt-5.6-sol@high` **once** — but
+only if the current ISO-week burn proxy is below `codex_weekly_burn_threshold` (below). If
+the week's burn is at/above the threshold, **skip the @high attempt** and fall through to
+the claude backend immediately (`backend_escalated`). This keeps the weekly-cliff guard —
+we don't spend frontier-effort codex tokens late in a hot week — while shifting more volume
+onto codex when there's headroom. `xhigh`/`max`/`ultra` efforts and prior-gen models
+(gpt-5.5/5.4/5.4-mini — dominated by the 5.6 ladder) remain **not** auto-dispatched; sol
+above high is a Gate 2 user decision. Codex fallback column is empty — backend order *is*
+the fallback.
+
+**Provisional — review 2026-08-17.** Mark confirmed only after `cost-report.sh` telemetry
+shows the @high rung (a) actually salvages tasks that @medium failed and (b) does not blow
+the weekly cliff. Until then the threshold default is conservative.
+
+### `codex_weekly_burn_threshold` (tunable)
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `codex_weekly_burn_threshold` | `4_000_000` tokens (ISO-week, all codex runs incl. `reasoning_tokens`) | Above this current-week burn proxy in `logs/cost.jsonl`, the `sol@high` attempt is skipped and control falls through to the claude backend. Conservative starting value pending telemetry — raise it once `cost-report.sh` shows the real weekly ceiling. |
+
+The proxy is the same per-run token sum `cost-report.sh` already rolls up per ISO-week (see
+Weekly-quota burn proxy below); the orchestrator reads the current week's total before
+deciding the @high bump.
 
 ### Claude tier column (subscription auth only)
 

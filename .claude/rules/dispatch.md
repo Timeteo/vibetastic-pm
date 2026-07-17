@@ -208,14 +208,19 @@ exhausted before metered tokens** — that is why `builder_backends` defaults to
   opencode only) from the current backend's column in `framework/MODELS.md`, append
   `tier_escalated` (from→to tier, verifier tail), re-dispatch. No `failure_count` change.
 - On codex, tier rungs are model-size steps (luna → terra → sol@low); exit 20 at `heavy`
-  gets one effort bump (sol@low → sol@medium) before the backend counts as exhausted.
-  Efforts above medium are never auto-dispatched (weekly-cliff guard — Gate 2 only).
+  gets one effort bump (sol@low → sol@medium), then one **burn-gated** bump
+  (sol@medium → sol@high) before the backend counts as exhausted. The @high bump fires only
+  if the current ISO-week burn proxy in `logs/cost.jsonl` is **below**
+  `codex_weekly_burn_threshold` (see `framework/MODELS.md` § Codex tier column); at/above it,
+  skip @high and `backend_escalated` to the claude backend immediately. Log the skip reason
+  in the escalation event. Efforts above high are never auto-dispatched (weekly-cliff guard —
+  Gate 2 only).
 
 **Axis 2 — backend, when the current backend's ladder is exhausted or unavailable.**
 
-- Exit 20 at `heavy` (post effort-bump on codex): move to the **next backend** in
-  `builder_backends`, re-enter at `standard`, append `backend_escalated` (from→to backend,
-  verifier tail). No `failure_count` change.
+- Exit 20 at `heavy` (post effort-bumps on codex — sol@medium, then burn-gated sol@high):
+  move to the **next backend** in `builder_backends`, re-enter at `standard`, append
+  `backend_escalated` (from→to backend, verifier tail). No `failure_count` change.
 - Exit **30** (backend unavailable — CLI missing, auth failure, quota exhausted): skip to
   the next backend at the **same tier**, append `backend_skipped`. No `failure_count` change.
 - All backends exhausted: increment `failure_count`, write the verifier output to `error`,
