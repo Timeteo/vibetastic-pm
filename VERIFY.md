@@ -69,6 +69,61 @@ costs ~zero in practice.
 
 ---
 
+## Pre-build critique — shift-left review (R1+ / security, 2026-07-20)
+
+Diff review reacts: it runs *after* the builder has already burned budget, and it can only
+find the gotcha once it is in the diff. The **pre-build critique** is the mirror rung — it
+reads the **plan** for blast radius, lost behavior, and underspecification **before** dispatch,
+which is the cheapest place to fix a design-level gotcha. It exists to catch the "just talk to
+the Partner and let it go" failure: a technically-correct diff that passes verify and still
+does the wrong thing or breaks something adjacent.
+
+**Applies to** any build task at **R1 / R2 or `security: true`** — whatever its origin (a Tech
+Lead task spec, an Architect Stage-2 task, or a change the Partner talked itself into
+conversationally). **R0 / isolated tasks skip it** (bias up when unsure — the rung is cheap, a
+missed consequence is not). Because every target-code change flows through `dispatch.sh` (the
+Partner never writes target code), wiring the rung to the dispatch boundary catches the
+conversational path for free — see `.claude/rules/dispatch.md` § Pre-Build Critique.
+
+Cost structure — identical cheap-first / Opus-adjudicates split as diff review:
+
+1. **The critique runs on a cheap read-only tier.** Dispatch `dispatch.sh --read-only` with
+   `prompts/critic.md` rendered for the task. The critic returns a verdict + findings, changes
+   nothing.
+2. **The Partner adjudicates only.** It reads the findings against SPEC and decides
+   dispatch / rework / escalate — it does not perform the plan critique itself at Opus rates.
+
+### Critic family diversity (hard rule)
+
+**The critic must be a different model family than whoever authored the plan** — the Tech Lead
+(Sonnet) or the Partner (Opus). Same-family critique reproduces the author's blind spots, the
+same failure the Reviewer's diversity rule guards against. Route the critique to the **codex**
+backend (gpt-5.6-terra, `standard`) or **opencode** `standard` — never an Anthropic critic of an
+Anthropic-authored plan. (This is the genuinely good use of the flat-rate codex lane in a review
+role.)
+
+### Security floor
+
+For `security: true` the critique runs at a **capable rung**, not the cheap tier: a non-Anthropic
+reviewer at or above Sonnet capability (opencode `heavy`, glm-5.2) or a family-diverse Sonnet
+subagent. **Fable is never used** (policy-restricted from security work — MODELS.md § Orchestrator).
+
+### Adjudication
+
+The Partner reads the critic's output:
+
+- **BLOCKING findings must be resolved before dispatch** — fold them into the spec / re-plan via
+  the Tech Lead, or record an explicit **user override** in TASK_LOG (`critic_override`, with the
+  finding and the reason). No silent proceed.
+- **ADVISORY findings** are logged (`critic_returned`); fold in at the Partner's discretion.
+- **`RECOMMENDED_VERIFY_TIER`**, if higher than the task's stated `verify_tier`, **raises it**
+  (bias up) before dispatch.
+
+**A R1+/security task dispatched to a builder with an unresolved BLOCKING finding is a gate
+violation**, exactly as a diff merged without the diff-review rung is.
+
+---
+
 ## Security-sensitive tasks — the one place cheap-first is wrong (2026-07-17)
 
 A task carries `security: true` when its diff touches **auth, credentials, keychain,

@@ -69,6 +69,12 @@ Gate 3 (stage transition) auto-advances with a posted summary. The **merge gate*
 `VERIFY.md`: no merge until the task's `verify_tier` ladder and the diff-review verdict
 have passed.
 
+**Pre-build critique (shift-left, not a hard stop):** before dispatching any build task at
+`verify_tier` R1/R2 or `security: true`, a read-only critic that is **family-diverse from the
+plan's author** reads the plan for gotchas — blast radius, lost behavior, underspecification
+(`prompts/critic.md`). The Partner resolves BLOCKING findings before build; R0/isolated tasks
+skip it. This is where "let it go" changes get caught — see `VERIFY.md` § Pre-build critique.
+
 ## What the orchestrator never does
 
 - Self-approve SPEC or proceed past Gate 1/Gate 2 without explicit user confirmation
@@ -76,5 +82,7 @@ have passed.
 - Merge a builder diff without the VERIFY.md ladder for its tier
 - Perform first-pass diff review or open-ended code diagnosis itself at peak cost —
   dispatch it read-only to a cheap tier and adjudicate the report
+- Dispatch a R1+/`security` build task with an unresolved BLOCKING pre-build critique finding —
+  resolve it (re-spec) or record an explicit user override first (`VERIFY.md` § Pre-build critique)
 - Invent requirements not stated in SPEC.md
 - Route any Anthropic model through the API/opencode tiers (MODELS.md hard invariant)

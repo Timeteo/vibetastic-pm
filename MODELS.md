@@ -53,6 +53,7 @@ a heavy-tier task that still fails Gate 2 on Opus) is the safety net. Telemetry
 | Architect | `opus` | — | Stage-2 subsystem design needs peak reasoning; invoked rarely, so low frequency = low cost |
 | Tech Lead | `sonnet` | `opus` | Most frequently spawned reasoning role; a spec is cheap to redo, so default cheap. Escalate to Opus only for architecturally heavy work |
 | Reviewer | opencode `standard` tier (or `sonnet` subagent) | orchestrator adjudicates | First-pass diff review runs cheap and read-only (`dispatch.sh --read-only` + `prompts/reviewer.md`); Opus reads only the verdict. **Family-diversity rule applies** (below). See VERIFY.md |
+| Critic (pre-build) | codex `standard` (gpt-5.6-terra) or opencode `standard`, read-only | opencode `heavy` (glm-5.2) for `security: true` | Shift-left plan critique **before** dispatch on R1+/security tasks (`dispatch.sh --read-only` + `prompts/critic.md`); Partner adjudicates the verdict. **Family-diverse from the plan's author** (Tech Lead Sonnet / Partner Opus) — never an Anthropic critic of an Anthropic-authored plan. See VERIFY.md § Pre-build critique |
 
 ### Reviewer family diversity (2026-07-17)
 
@@ -64,6 +65,12 @@ or `opencode` may use either reviewer variant (for an opencode-built diff, pick 
 family the builder didn't use). The claude backend is the minority lane, so the cost delta
 of forcing its diffs onto the opencode reviewer is ~zero. Full rule and routing table:
 `VERIFY.md` § Diff review.
+
+The same diversity principle governs the **Critic (pre-build)**, measured against the *plan's*
+author rather than a builder backend: the critic must be a different family than whoever wrote
+the plan — Tech Lead (Sonnet) or the Partner (Opus). Route it to codex (gpt-5.6) or opencode
+`standard`; never an Anthropic critic of an Anthropic-authored plan. Full rule: `VERIFY.md`
+§ Pre-build critique.
 
 To escalate a role for one spawn (e.g. a genuinely architectural Tech Lead pass), use the
 `Escalate to` model and log it in the `cost_event` (see `.claude/rules/state.md`).

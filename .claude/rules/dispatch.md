@@ -11,6 +11,7 @@ loop:
     else → blocked state (investigate and report to user)
     break
   for each task in ready (parallel only if same stage and no inter-dependencies):
+    if task.verify_tier in {R1,R2} or task.security → run Pre-Build Critique first (below)
     dispatch task
     on return → apply result (see state.md)
   re-evaluate ready tasks
@@ -89,6 +90,37 @@ After return, parse on delimiter `<!-- TECH_LEAD_RESULT_START -->`:
 Then: append `tech_lead_returned` + `task_created` to TASK_LOG. New task enters the normal dispatch loop.
 
 Missing delimiter or malformed YAML → treat as parse failure.
+
+---
+
+## Pre-Build Critique
+
+The shift-left review rung — it reads the **plan** for gotchas before a builder writes code.
+Run it **before dispatching any build task at `verify_tier` R1/R2 or `security: true`** (R0 /
+isolated tasks skip it). Because every target-code change goes through this dispatch flow, the
+rung also covers changes the Partner talked itself into conversationally — there is no other
+path to the target code. Full rules: `framework/VERIFY.md` § Pre-build critique.
+
+1. **Render** `framework/prompts/critic.md`:
+   - `{{PLAN}}` → the task's prompt file (`prompts/task-T0XX.md`, or the extracted build-spec
+     section)
+   - `{{VERIFY_TIER}}`, `{{SECURITY}}` → the task's flags from PLAN.md
+   - `{{TARGET_PROJECT_PATH}}` → absolute path to `../<project-name>/`
+2. **Dispatch read-only, family-diverse from the plan's author** (Tech Lead Sonnet or Partner
+   Opus → route to the codex or opencode `standard` critic; `security: true` forces a capable
+   rung — see VERIFY.md). Same wrapper the Reviewer uses:
+
+   ```bash
+   bash framework/dispatch.sh --read-only <critic-model> ../<project-name>/ prompts/critic-T0XX.md 2>&1
+   ```
+
+3. **Adjudicate (Partner):** read the verdict.
+   - **REWORK / any BLOCKING finding** → resolve before dispatch: re-spec via the Tech Lead, or
+     record an explicit user override (`critic_override` in TASK_LOG with finding + reason). Do
+     **not** dispatch the build with an unresolved BLOCKING finding — it is a gate violation.
+   - **ADVISORY** findings → log; fold in at discretion.
+   - `RECOMMENDED_VERIFY_TIER` higher than the stated tier → raise `verify_tier` on the task.
+   - Append `critic_returned` to TASK_LOG. Only then proceed to the build dispatch below.
 
 ---
 
